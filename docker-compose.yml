@@ -1,0 +1,5 @@
+services:
+  miningbots-manager:
+    image: miningbots-coolify-manager
+    build: .
+    container_name: miningbots-manager
