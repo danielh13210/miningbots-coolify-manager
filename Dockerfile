@@ -1,4 +1,5 @@
 FROM python:3.13-slim-trixie
+EXPOSE 80
 
 RUN mkdir /app
 WORKDIR /app
