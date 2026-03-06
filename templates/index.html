@@ -19,11 +19,13 @@
     <img src="/static/favicon.ico" class="navbar-brand-logo">
     <a class="navbar-brand" href="#">Mining Bots</a>
   </nav>
-  <h1>Active Instances</h1>
+  <h1 class="title">Active Instances</h1>
   {% if instances %}
     {% for instance in instances %}
-      <h2>{{instance}}</h2>
-      <a href="https://miningbots-fe.fried.tinkertofu.com/connect.html#{{instance}}" target="_blank">Open Frontend</a>
+      <div class="instance-box">
+        <p>Instance: {{instance}}</p>
+        <a href="https://miningbots-fe.fried.tinkertofu.com/connect.html#{{instance}}" target="_blank">Open Frontend</a>
+      </div>
     {% endfor %}
   {% else %}
     <h2>No active instances.</h2>
