@@ -23,6 +23,7 @@
   {% if instances %}
     {% for instance in instances %}
       <h2>{{instance}}</h2>
+      <a href="https://miningbots-fe.fried.tinkertofu.com/connect.html#{{instance}}" target="_blank">Open Frontend</a>
     {% endfor %}
   {% else %}
     <h2>No active instances.</h2>
