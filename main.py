@@ -6,7 +6,7 @@ import re
 app = Flask(__name__)
 
 traefik_rule_matcher=re.compile(r'traefik\..*\.rule')
-get_host=re.compile(r'(Host\(".*"\))')
+get_host=re.compile(r'Host\("(.*)"\)')
 
 def get_traefik_host(container):
     labels=container['Labels']
