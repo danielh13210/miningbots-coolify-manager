@@ -11,6 +11,7 @@
     integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
     crossorigin="anonymous"></script>
   <link href="/static/styles.css" rel="stylesheet" />
+  <script src="/static/start_stop.js"></script>
 </head>
 
 <body>
@@ -22,9 +23,10 @@
   <h1 class="title">Active Instances</h1>
   {% if instances %}
     {% for instance in instances %}
-      <div class="instance-box">
+      <div class="instance-box" id="instancebox-{{instance}}">
         <p>Instance: {{instance}}</p>
         <a href="https://miningbots-fe.fried.tinkertofu.com/connect.html#{{instance}}" target="_blank">Open Frontend</a>
+        <button onclick="stop_clicked('{{instance}}')" id="stop-{{instance}}">Stop</button>
       </div>
     {% endfor %}
   {% else %}

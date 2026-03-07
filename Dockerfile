@@ -4,7 +4,7 @@ EXPOSE 80
 RUN mkdir /app
 WORKDIR /app
 
-RUN pip3 install flask
+RUN pip3 install flask httpx
 COPY . /app
 
 CMD python3 ./main.py

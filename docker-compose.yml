@@ -3,3 +3,5 @@ services:
     image: miningbots-coolify-manager
     build: .
     container_name: miningbots-manager
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
