@@ -1,8 +1,23 @@
 from flask import Flask, render_template, redirect, request, jsonify
 import httpx
 import os
+import re
 
 app = Flask(__name__)
+
+traefik_rule_matcher=re.compile(r'traefik\..*\.rule')
+get_host=re.compile(r'(Host\(".*"\))')
+
+def get_traefik_host(container):
+    labels=container['Labels']
+    for label in labels:
+        if traefik_rule_matcher.match(label):
+            rule=labels[label]
+            if matches:=get_host.search(rule):
+                return matches.group(1)
+            else:
+                raise KeyError
+    raise KeyError
 
 def get_active_instances():
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
@@ -12,7 +27,7 @@ def get_active_instances():
             params={"filters": '{"label":["miningbots-app-instance"]}'}
         )
         containers = r.json()
-    return list(map(lambda container:os.path.basename(container['Names'][0]),containers))
+    return dict(map(lambda container:(os.path.basename(container['Names'][0]),get_traefik_host(container)),containers))
 
 def stop_instance(instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
