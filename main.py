@@ -1,4 +1,5 @@
 from flask import Flask, render_template, redirect, request, jsonify
+import zipfile, tarfile, stat, tempfile
 import httpx
 import os
 import re
@@ -7,6 +8,54 @@ app = Flask(__name__)
 
 traefik_rule_matcher=re.compile(r'traefik\..*\.rule')
 get_host=re.compile(r'Host\("(.*)"\)')
+
+class ConflictException(ValueError): pass
+
+def safe_extract(zip_file, target_dir):
+    for info in zip_file.infolist():
+        # Check for symlinks
+        if stat.S_ISLNK(info.external_attr >> 16):
+            continue
+
+        # Build safe path
+        extracted_path = os.path.join(target_dir, info.filename)
+        abs_target = os.path.abspath(target_dir)
+        abs_extracted = os.path.abspath(extracted_path)
+
+        # Prevent path traversal
+        if not abs_extracted.startswith(abs_target):
+            continue
+
+        zip_file.extract(info, target_dir)
+
+def spawn_new_instance(name):
+    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+        payload={
+            "Image": "miningbots-server",
+            "Labels": {
+                "miningbots-app-instance": "",
+                "traefik.enable": "true",
+                f"traefik.http.routers.{name}-mb.rule": f'Host("{name}-mb.fried.tinkertofu.com")',
+                f"traefik.http.routers.{name}-mb.entrypoints": "https",
+                f"traefik.http.routers.{name}-mb.tls": "true",
+                f"traefik.http.routers.{name}-mb.tls.certresolver": "letsencrypt",
+                f"traefik.http.services.{name}.loadbalancer.server.port": "9003"
+            },
+            "HostConfig": {
+                "NetworkMode": "mb-instances",
+                "AutoRemove": True
+            }
+        }
+        resp = client.post(f"http://localhost/containers/create?name={name}", json=payload)
+        if resp.status_code!=201:
+            if resp.status_code==409:
+                raise ConflictException
+            else:
+                raise Exception(f"cannot create: http error {resp.status_code} {resp.json()}")
+
+        start_url = f"http://localhost/containers/{name}/start"
+        resp = client.post(start_url)
+        if resp.status_code!=204: raise Exception(f"cannot start: http error {resp.status_code} {resp.json()}")
 
 def get_traefik_host(container):
     labels=container['Labels']
@@ -39,6 +88,30 @@ def stop_instance(instance):
 def home():
     # Render index.html from the templates folder
     return render_template("index.html", instances=get_active_instances())
+
+@app.route("/new",methods=['GET'])
+def new():
+    # Render new.html from templates
+    return render_template("new.html")
+@app.route("/new",methods=['POST'])
+def api_new():
+    try:
+        spawn_new_instance(request.form.get('name'))
+    except ConflictException:
+        return render_template("new.html",error="Docker container conflict. Please choose another name")
+    config_zip=request.files.get('config-zip')
+    with tempfile.TemporaryDirectory() as tmpdir:
+        os.close((temp:=tempfile.mkstemp())[0]);file=temp[1];del temp
+        config_zip.save(file)
+        with zipfile.ZipFile(file, 'r') as zip_device:
+            safe_extract(zip_device, tmpdir)
+
+        os.close((temp:=tempfile.mkstemp())[0]);file=temp[1];del temp
+        with tarfile.open(file, "w") as tar:
+            for f in os.scandir(tmpdir):
+                tar.add(f)
+    return redirect("/")
+
 
 @app.route("/favicon.ico")
 def favicon():

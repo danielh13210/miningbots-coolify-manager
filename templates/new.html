@@ -20,19 +20,20 @@
     <img src="/static/favicon.ico" class="navbar-brand-logo">
     <a class="navbar-brand" href="#">Mining Bots</a>
   </nav>
-  <h1 class="title">Active Instances</h1>
-  {% if instances %}
-    {% for instance in instances %}
-      <div class="instance-box" id="instancebox-{{instance}}">
-        <p>Instance: {{instance}}</p>
-        <a href="https://miningbots-fe.fried.tinkertofu.com/connect.html#{{instances[instance]}}" target="_blank">Open Frontend</a>
-        <button onclick="stop_clicked('{{instance}}')" id="stop-{{instance}}">Stop</button>
-      </div>
-    {% endfor %}
-  {% else %}
-    <h2 id="no-instance">No active instances.</h2>
-  {% endif %}
-  <a href="/new">New Instance</a>
+  <form method="POST" enctype="multipart/form-data">
+    <h1>Create New Instance</h1>
+    <p>Please upload your config files here, based on the template.</p>
+    <div><a href="/static/config.zip">Download config here</a></div>
+    <input style="margin-top:5px;margin-bottom:5px;" type="file" name="config-zip" accept=".zip,application/zip,application/x-zip-compressed" required />
+    <div>
+        <label for="name">Instance Name</label>
+        <input type="text" name="name" required />
+    </div>
+    <input type="submit" value="Continue" />
+    {% if error %}
+      <h3>{{error}}</h3>
+    {% endif %}
+  </form>
 </body>
 
 </html>

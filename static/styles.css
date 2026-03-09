@@ -11,7 +11,7 @@ h1.title {
   margin-left: 5px;
 }
 
-.instance-box {
+.instance-box, #no-instance {
   border-bottom: 2px solid lightgray;
   margin-left: 5px;
   margin-right: 5px;
