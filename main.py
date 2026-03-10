@@ -127,6 +127,3 @@ def stop():
         return "",204
     else:
         return jsonify({"error":"failed to stop"}),500
-
-if __name__ == "__main__":
-    app.run(debug=False,port=80,host='0.0.0.0')
