@@ -50,7 +50,8 @@ def spawn_new_instance(name,config_dir):
                 f"traefik.http.routers.{name}-mb.entrypoints": "https",
                 f"traefik.http.routers.{name}-mb.tls": "true",
                 f"traefik.http.routers.{name}-mb.tls.certresolver": "letsencrypt",
-                f"traefik.http.services.{name}.loadbalancer.server.port": "9003"
+                f"traefik.http.services.{name}.loadbalancer.server.port": "9003",
+                "configdir":config_dir
             },
             "HostConfig": {
                 "NetworkMode": "mb-instances",
@@ -117,14 +118,13 @@ def api_new():
     try:
         config_zip=request.files.get('config-zip')
         config_dir=tempfile.mkdtemp()
-        os.close((temp:=tempfile.mkstemp())[0]);file=temp[1];del temp
-        config_zip.save(file)
         import shutil
         for mixin_file in os.listdir('mixin-config'):
             shutil.copy(os.path.join('mixin-config',mixin_file),config_dir)
-        with zipfile.ZipFile(file, 'r') as zip_device:
+        with zipfile.ZipFile(config_zip, 'r') as zip_device:
             safe_extract(zip_device, config_dir)
-        spawn_new_instance(request.form.get('name'),config_dir)
+        name=request.form.get('name')
+        spawn_new_instance(name,config_dir)
     except ConflictException:
         return render_template("new.html",error="Docker container conflict. Please choose another name")
     return redirect("/")
@@ -142,7 +142,20 @@ def stop():
         return jsonify({"error":"instance name required"}),500
     if instance not in (containers:=get_active_instances()):
         return jsonify({"error":"instance not found"}),404
+    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+        resp = client.get(f"http://localhost/containers/{instance}/json")
+        if resp.status_code == 200:
+            container = resp.json()
+        else:
+            raise Exception(f"failed to get labels: http error {resp.status_code} {resp.text}")
+    configdir=container['Config']['Labels'].get('configdir')
     if stop_instance(instance):
+        import shutil
+        try:
+            if configdir:
+                shutil.rmtree(configdir)
+        except:
+            raise
         return "",204
     else:
         return jsonify({"error":"failed to stop"}),500
