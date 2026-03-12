@@ -140,6 +140,8 @@ def stop():
         instance=request.args['instance']
     except KeyError:
         return jsonify({"error":"instance name required"}),500
+    if instance not in (containers:=get_active_instances()):
+        return jsonify({"error":"instance not found"}),404
     if stop_instance(instance):
         return "",204
     else:
