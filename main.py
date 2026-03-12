@@ -28,7 +28,18 @@ def safe_extract(zip_file, target_dir):
 
         zip_file.extract(info, target_dir)
 
-def spawn_new_instance(name):
+def rebase_path_for_docker(path):
+    from pathlib import Path
+
+    old_base = Path("/tmp")
+    new_base = Path("/tmp/mcm-tmp")
+    original_file = Path(path)
+
+    # Calculate the path relative to the old base, then join to the new base
+    relative_path = original_file.relative_to(old_base)
+    return (new_base / relative_path).as_posix()
+
+def spawn_new_instance(name,config_dir):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         payload={
             "Image": "miningbots-server",
@@ -43,7 +54,15 @@ def spawn_new_instance(name):
             },
             "HostConfig": {
                 "NetworkMode": "mb-instances",
-                "AutoRemove": True
+                "AutoRemove": True,
+                    "Mounts": [
+                        {
+                            "Type": "bind",
+                            "Source": rebase_path_for_docker(config_dir),
+                            "Target": "/miningbots-server/config",
+                            "ReadOnly": True
+                        }
+                    ]
             }
         }
         resp = client.post(f"http://localhost/containers/create?name={name}", json=payload)
@@ -96,20 +115,18 @@ def new():
 @app.route("/new",methods=['POST'])
 def api_new():
     try:
-        spawn_new_instance(request.form.get('name'))
-    except ConflictException:
-        return render_template("new.html",error="Docker container conflict. Please choose another name")
-    config_zip=request.files.get('config-zip')
-    with tempfile.TemporaryDirectory() as tmpdir:
+        config_zip=request.files.get('config-zip')
+        config_dir=tempfile.mkdtemp()
         os.close((temp:=tempfile.mkstemp())[0]);file=temp[1];del temp
         config_zip.save(file)
+        import shutil
+        for mixin_file in os.listdir('mixin-config'):
+            shutil.copy(os.path.join('mixin-config',mixin_file),config_dir)
         with zipfile.ZipFile(file, 'r') as zip_device:
-            safe_extract(zip_device, tmpdir)
-
-        os.close((temp:=tempfile.mkstemp())[0]);file=temp[1];del temp
-        with tarfile.open(file, "w") as tar:
-            for f in os.scandir(tmpdir):
-                tar.add(f)
+            safe_extract(zip_device, config_dir)
+        spawn_new_instance(request.form.get('name'),config_dir)
+    except ConflictException:
+        return render_template("new.html",error="Docker container conflict. Please choose another name")
     return redirect("/")
 
 
