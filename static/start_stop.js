@@ -1,5 +1,5 @@
 function stop(instance,completion_handler){
-    fetch(`${location.origin}/stop?instance=${instance}`).then((resp)=>{
+    fetch(`${location.origin}/stop?instance=${instance}`,{method:'POST'}).then((resp)=>{
         const success=resp.ok;
         completion_handler(success);
     })

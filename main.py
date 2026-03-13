@@ -134,8 +134,8 @@ def api_new():
 def favicon():
     return redirect("/static/favicon.ico")
 
-@app.route("/stop")
-def stop():
+@app.route("/stop",methods=['POST'])
+def api_stop():
     try:
         instance=request.args['instance']
     except KeyError:
