@@ -1,4 +1,5 @@
 from flask import Flask, render_template, redirect, request, jsonify
+import json
 import zipfile, tarfile, stat, tempfile
 import httpx
 import os
@@ -39,12 +40,13 @@ def rebase_path_for_docker(path):
     relative_path = original_file.relative_to(old_base)
     return (new_base / relative_path).as_posix()
 
-def spawn_new_instance(name,config_dir):
+def spawn_new_instance(name,config_dir,observer_key):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         payload={
             "Image": "miningbots-server",
             "Labels": {
                 "miningbots-app-instance": "",
+                "observer_key": str(observer_key),
                 "traefik.enable": "true",
                 f"traefik.http.routers.{name}-mb.rule": f'Host("{name}-mb.fried.tinkertofu.com")',
                 f"traefik.http.routers.{name}-mb.entrypoints": "https",
@@ -87,6 +89,8 @@ def get_traefik_host(container):
             else:
                 raise KeyError
     raise KeyError
+def get_observer_key(container):
+    return container['Labels']['observer_key']
 
 def get_active_instances():
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
@@ -96,7 +100,7 @@ def get_active_instances():
             params={"filters": '{"label":["miningbots-app-instance"]}'}
         )
         containers = r.json()
-    return dict(map(lambda container:(os.path.basename(container['Names'][0]),get_traefik_host(container)),containers))
+    return dict(map(lambda container:(os.path.basename(container['Names'][0]),{'url':f'https://{get_traefik_host(container)}','observer_key':get_observer_key(container)}),containers))
 
 def stop_instance(instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
@@ -123,8 +127,11 @@ def api_new():
             shutil.copy(os.path.join('mixin-config',mixin_file),config_dir)
         with zipfile.ZipFile(config_zip, 'r') as zip_device:
             safe_extract(zip_device, config_dir)
+        keyfile=open(os.path.join(config_dir,'observer_keys.json'),'r')
+        keys=json.load(keyfile)
+        keyfile.close()
         name=request.form.get('name')
-        spawn_new_instance(name,config_dir)
+        spawn_new_instance(name,config_dir,keys[0])
     except ConflictException:
         return render_template("new.html",error="Docker container conflict. Please choose another name")
     return redirect("/")

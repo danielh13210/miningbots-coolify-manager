@@ -25,7 +25,7 @@
     {% for instance in instances %}
       <div class="instance-box" id="instancebox-{{instance}}">
         <p>Instance: {{instance}}</p>
-        <a href="https://miningbots-fe.fried.tinkertofu.com/connect.html#{{instances[instance]}}" target="_blank">Open Frontend</a>
+        <a href="https://miningbots-fe.fried.tinkertofu.com/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}" target="_blank">Open Frontend</a>
         <button onclick="stop_clicked('{{instance}}')" id="stop-{{instance}}">Stop</button>
       </div>
     {% endfor %}
