@@ -9,6 +9,6 @@ services:
       - /tmp/mcm-tmp:/tmp
     labels:
       - "traefik.http.middlewares.login-auth.basicauth.users=${PASSWORD_HASH:?}"
-      - "traefik.http.routers.https-0-${serviceID:?}.middlewares=login-auth"
+      - "traefik.http.routers.https-0-${COOLIFY_RESOURCE_UUID:?}.middlewares=login-auth"
     environment:
       - fe_host=${fe_host:?}
