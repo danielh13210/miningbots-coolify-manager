@@ -159,3 +159,16 @@ def api_stop():
         return "",204
     else:
         return jsonify({"error":"failed to stop"}),500
+
+#ensure mb-instances exists
+with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+    response = client.post(
+            "http://localhost/networks/create",
+            json={
+              "Name": "mb-instances",
+              "Driver": "bridge",
+              "CheckDuplicate": True
+            }
+    )
+    if response.status_code!=409 and response.status_code!=201:
+        raise Exception(f"failed to create: http error {response.status_code} {response.json()}")
