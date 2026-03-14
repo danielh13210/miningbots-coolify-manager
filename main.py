@@ -172,3 +172,14 @@ with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as 
     )
     if response.status_code!=409 and response.status_code!=201:
         raise Exception(f"failed to create network: http error {response.status_code} {response.json()}")
+
+    # Connect the container to the mb-instances network
+    response = client.post(
+        "http://localhost/networks/mb-instances/connect",
+        json={
+            "Container": "coolify-proxy"
+        }
+    )
+
+    if response.status_code!=200 and response.status_code!=409:
+        print(f"failed to connect: http error {response.status_code} {response.json()}")
