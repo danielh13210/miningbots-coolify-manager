@@ -111,7 +111,7 @@ def stop_instance(instance):
 @app.route("/")
 def home():
     # Render index.html from the templates folder
-    return render_template("index.html", instances=get_active_instances())
+    return render_template("index.html", instances=get_active_instances(), frontend_host=os.environ['fe_host'])
 
 @app.route("/new",methods=['GET'])
 def new():
