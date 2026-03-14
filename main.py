@@ -171,4 +171,4 @@ with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as 
             }
     )
     if response.status_code!=409 and response.status_code!=201:
-        raise Exception(f"failed to create: http error {response.status_code} {response.json()}")
+        raise Exception(f"failed to create network: http error {response.status_code} {response.json()}")
