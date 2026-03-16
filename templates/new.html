@@ -27,7 +27,7 @@
     <input style="margin-top:5px;margin-bottom:5px;" type="file" name="config-zip" accept=".zip,application/zip,application/x-zip-compressed" required />
     <div>
         <label for="name">Instance Name</label>
-        <input type="text" id="name" name="name" pattern="[A-Za-z0-9_-]+" title="Only letters, numbers, dashes, and underscores allowed." required/>
+        <input type="text" id="name" name="name" pattern="[a-zA-Z0-9][a-zA-Z0-9_\.\-]+" title="Only letters, numbers, dashes, periods, and underscores allowed. Must start with a letter or number." minlength="2" maxlength="64" required/>
     </div>
     <input type="submit" value="Continue" />
     {% if error %}
