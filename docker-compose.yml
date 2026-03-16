@@ -12,3 +12,4 @@ services:
       - "traefik.http.routers.https-0-${COOLIFY_RESOURCE_UUID:?}.middlewares=login-auth"
     environment:
       - fe_host=${fe_host:?}
+      - BASE_DOMAIN=${BASE_DOMAIN:?}

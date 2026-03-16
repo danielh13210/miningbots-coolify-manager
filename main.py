@@ -48,7 +48,7 @@ def spawn_new_instance(name,config_dir,observer_key):
                 "miningbots-app-instance": "",
                 "observer_key": str(observer_key),
                 "traefik.enable": "true",
-                f"traefik.http.routers.{name}-mb.rule": f'Host("{name}-mb.fried.tinkertofu.com")',
+                f"traefik.http.routers.{name}-mb.rule": f'Host("{name}-mb.{os.environ['BASE_DOMAIN']}")',
                 f"traefik.http.routers.{name}-mb.entrypoints": "https",
                 f"traefik.http.routers.{name}-mb.tls": "true",
                 f"traefik.http.routers.{name}-mb.tls.certresolver": "letsencrypt",
