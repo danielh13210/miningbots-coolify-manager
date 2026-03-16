@@ -23,7 +23,11 @@
   {% if instances %}
     {% for instance in instances %}
       <div class="instance-box" id="instancebox-{{instance}}">
-        <p>Instance: {{instance}}</p>
+        <span>Instance: {{instance}}</span>
+        {% if instances[instance]['running'] %}
+          <span class="running">Running</span>
+        {% endif %}
+        <br>
         <a href="{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}" target="_blank">Open Frontend</a>
         <a href="/details?instance={{instance}}">More...</a>
       </div>

@@ -16,3 +16,7 @@ h1.title {
   margin-left: 5px;
   margin-right: 5px;
 }
+
+.running {
+  color:gray;
+}
