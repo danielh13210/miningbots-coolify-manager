@@ -18,7 +18,7 @@ function stop_clicked(instance){
             setTimeout(()=>{
                 button.disabled=false;
                 button.innerText="Stop";
-            },2000)
+            },2000);
         }
     })
 }
