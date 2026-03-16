@@ -40,7 +40,7 @@ def rebase_path_for_docker(path):
     relative_path = original_file.relative_to(old_base)
     return (new_base / relative_path).as_posix()
 
-def spawn_new_instance(name,config_dir,observer_key):
+def spawn_new_instance(name,config_dir,observer_key,start: bool=False):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         payload={
             "Image": "miningbots-server",
@@ -57,7 +57,6 @@ def spawn_new_instance(name,config_dir,observer_key):
             },
             "HostConfig": {
                 "NetworkMode": "mb-instances",
-                "AutoRemove": True,
                     "Mounts": [
                         {
                             "Type": "bind",
@@ -74,10 +73,10 @@ def spawn_new_instance(name,config_dir,observer_key):
                 raise ConflictException
             else:
                 raise Exception(f"cannot create: http error {resp.status_code} {resp.json()}")
-
-        start_url = f"http://localhost/containers/{name}/start"
-        resp = client.post(start_url)
-        if resp.status_code!=204: raise Exception(f"cannot start: http error {resp.status_code} {resp.json()}")
+        if start:
+            start_url = f"http://localhost/containers/{name}/start"
+            resp = client.post(start_url)
+            if resp.status_code!=204: raise Exception(f"cannot start: http error {resp.status_code} {resp.json()}")
 
 def get_traefik_host(container):
     labels=container['Labels']
@@ -97,16 +96,38 @@ def get_active_instances():
         # Filter for containers that have the label "miningbots-app-instance"
         r = client.get(
             "http://localhost/containers/json",
-            params={"filters": '{"label":["miningbots-app-instance"]}'}
+            params={"filters": '{"label":["miningbots-app-instance"]}',"all":'true'}
         )
         containers = r.json()
-    return dict(map(lambda container:(os.path.basename(container['Names'][0]),{'url':f'https://{get_traefik_host(container)}','observer_key':get_observer_key(container)}),containers))
+    return dict(map(lambda container:(os.path.basename(container['Names'][0]),{'url':f'https://{get_traefik_host(container)}','observer_key':get_observer_key(container),'running':container['State']=='running'}),containers))
 
 def stop_instance(instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         response = client.post(f"http://localhost/containers/{instance}/stop",timeout=httpx.Timeout(30.0))
 
-        return response.status_code==204 # return true if success
+        try:
+            content=response.json()
+        except:
+            content=None
+        return {'success':response.status_code==204,'rawError':content} # return true if success
+def delete_instance(instance):
+    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+        response = client.delete(f"http://localhost/containers/{instance}",timeout=httpx.Timeout(30.0))
+
+        try:
+            content=response.json()
+        except:
+            content=None
+        return {'success':response.status_code==204,'rawError':content} # return true if success
+def start_instance(instance):
+    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+        response = client.post(f"http://localhost/containers/{instance}/start",timeout=httpx.Timeout(30.0))
+
+        try:
+            content=response.json()
+        except:
+            content=None
+        return {'success':response.status_code==204,'rawError':content} # return true if success
 
 @app.route("/")
 def home():
@@ -137,7 +158,7 @@ def api_new():
         keys=json.load(keyfile)
         keyfile.close()
         name=request.form.get('name')
-        spawn_new_instance(name,config_dir,keys[0])
+        spawn_new_instance(name,config_dir,keys[0],start=request.form.get('autoStart'))
     except ConflictException:
         return render_template("new.html",error="Docker container conflict. Please choose another name")
     return redirect("/")
@@ -153,25 +174,36 @@ def api_stop():
         instance=request.args['instance']
     except KeyError:
         return jsonify({"error":"instance name required"}),500
-    if instance not in (containers:=get_active_instances()):
+    if instance not in get_active_instances():
         return jsonify({"error":"instance not found"}),404
-    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        resp = client.get(f"http://localhost/containers/{instance}/json")
-        if resp.status_code == 200:
-            container = resp.json()
-        else:
-            raise Exception(f"failed to get labels: http error {resp.status_code} {resp.text}")
-    configdir=container['Config']['Labels'].get('configdir')
-    if stop_instance(instance):
-        import shutil
-        try:
-            if configdir:
-                shutil.rmtree(configdir)
-        except:
-            raise
+    if (error:=stop_instance(instance))['success']:
         return "",204
     else:
-        return jsonify({"error":"failed to stop"}),500
+        return jsonify({"error":"failed to stop","rawError":error['rawError']}),500
+@app.route("/delete",methods=['DELETE'])
+def api_delete():
+    try:
+        instance=request.args['instance']
+    except KeyError:
+        return jsonify({"error":"instance name required"}),500
+    if instance not in get_active_instances():
+        return jsonify({"error":"instance not found"}),404
+    if (error:=delete_instance(instance))['success']:
+        return "",204
+    else:
+        return jsonify({"error":"failed to delete","rawError":error['rawError']}),500
+@app.route("/start",methods=['POST'])
+def api_start():
+    try:
+        instance=request.args['instance']
+    except KeyError:
+        return jsonify({"error":"instance name required"}),500
+    if instance not in get_active_instances():
+        return jsonify({"error":"instance not found"}),404
+    if (error:=start_instance(instance))['success']:
+        return "",204
+    else:
+        return jsonify({"error":"failed to start","rawError":error['rawError']}),500
 
 #ensure mb-instances exists
 with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:

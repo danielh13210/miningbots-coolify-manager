@@ -21,5 +21,11 @@
     <a class="navbar-brand" href="#">Mining Bots</a>
   </nav>
   <h1>Details of instance {{instance}}</h1>
-  <button onclick="stop_clicked('{{instance}}');" id="stop-{{instance}}">Stop and Delete</button>
+  {% if instances[instance]['running'] %}
+    <button onclick="stop_clicked('{{instance}}');" id="stop-{{instance}}">Stop</button>
+  {% else %}
+    <button onclick="start_clicked('{{instance}}');" id="start-{{instance}}">Start</button>
+  {% endif %}
+  <button onclick="delete_clicked('{{instance}}')" {{'disabled="true" title="Instance is running, must be stopped to delete."' if instances[instance]['running']}} id="delete-{{instance}}">Delete</button>
+
 </body>
