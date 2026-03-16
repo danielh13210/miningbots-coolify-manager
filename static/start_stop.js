@@ -34,7 +34,7 @@ function stop_clicked(instance){
                 button.innerText="Stop";
             },2000);
         }
-    })
+    });
 }
 
 function start_clicked(instance){
@@ -52,7 +52,7 @@ function start_clicked(instance){
                 button.innerText="Start";
             },2000);
         }
-    })
+    });
 }
 
 function delete_clicked(instance){
@@ -70,5 +70,5 @@ function delete_clicked(instance){
                 button.innerText="Delete";
             },2000);
         }
-    })
+    });
 }
