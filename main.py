@@ -113,10 +113,16 @@ def home():
     # Render index.html from the templates folder
     return render_template("index.html", instances=get_active_instances(), frontend_url=os.environ['fe_host'])
 
+@app.route("/details")
+def details():
+    # Render index.html from the templates folder
+    return render_template("details.html", instance=request.args['instance'], instances=get_active_instances())
+
 @app.route("/new",methods=['GET'])
 def new():
     # Render new.html from templates
     return render_template("new.html")
+
 @app.route("/new",methods=['POST'])
 def api_new():
     try:

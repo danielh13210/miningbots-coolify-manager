@@ -11,6 +11,7 @@
     integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
     crossorigin="anonymous"></script>
   <link href="/static/styles.css" rel="stylesheet" />
+  <script src="/static/start_stop.js"></script>
 </head>
 
 <body>
@@ -19,19 +20,6 @@
     <img src="/static/favicon.ico" alt="tinkercademy logo" class="navbar-brand-logo">
     <a class="navbar-brand" href="#">Mining Bots</a>
   </nav>
-  <h1 class="title">Active Instances</h1>
-  {% if instances %}
-    {% for instance in instances %}
-      <div class="instance-box" id="instancebox-{{instance}}">
-        <p>Instance: {{instance}}</p>
-        <a href="{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}" target="_blank">Open Frontend</a>
-        <a href="/details?instance={{instance}}">More...</a>
-      </div>
-    {% endfor %}
-  {% else %}
-    <h2 id="no-instance">No active instances.</h2>
-  {% endif %}
-  <a href="/new">New Instance</a>
+  <h1>Details of instance {{instance}}</h1>
+  <button onclick="stop_clicked('{{instance}}');" id="stop-{{instance}}">Stop and Delete</button>
 </body>
-
-</html>

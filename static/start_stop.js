@@ -12,7 +12,7 @@ function stop_clicked(instance){
     button.innerText="Stopping...";
     stop(instance,(success)=>{
         if (success) {
-            location.reload();
+            location.href="/";
         } else {
             button.innerText="Failed";
             setTimeout(()=>{
