@@ -26,7 +26,7 @@
       <div class="instance-box" id="instancebox-{{instance}}">
         <p>Instance: {{instance}}</p>
         <a href="{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}" target="_blank">Open Frontend</a>
-        <button onclick="stop_clicked('{{instance}}')" id="stop-{{instance}}">Stop</button>
+        <button onclick="stop_clicked('{{instance}}')" id="stop-{{instance}}">Stop and Delete</button>
       </div>
     {% endfor %}
   {% else %}

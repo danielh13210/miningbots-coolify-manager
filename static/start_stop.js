@@ -6,7 +6,7 @@ function stop(instance,completion_handler){
 }
 
 function stop_clicked(instance){
-    if(!confirm(`Are you sure you want to stop instance "${instance}"?`))return;
+    if(!confirm(`Are you sure you want to stop and delete instance "${instance}"?`))return;
     let button=document.getElementById(`stop-${instance}`);
     button.disabled=true;
     button.innerText="Stopping...";
