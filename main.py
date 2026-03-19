@@ -33,7 +33,7 @@ def rebase_path_for_docker(path):
     from pathlib import Path
 
     old_base = Path("/tmp")
-    new_base = Path("/tmp/mcm-tmp")
+    new_base = Path("/data/mcm-data")
     original_file = Path(path)
 
     # Calculate the path relative to the old base, then join to the new base
