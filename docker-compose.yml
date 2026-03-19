@@ -10,6 +10,8 @@ services:
     labels:
       - "traefik.http.middlewares.login-auth.basicauth.users=${PASSWORD_HASH:?}"
       - "traefik.http.routers.https-0-${COOLIFY_RESOURCE_UUID:?}.middlewares=login-auth"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - fe_host=${fe_host:?}
       - BASE_DOMAIN=${BASE_DOMAIN:?}
