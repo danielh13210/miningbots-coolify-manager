@@ -99,7 +99,7 @@ def get_active_instances():
             params={"filters": '{"label":["miningbots-app-instance"]}',"all":'true'}
         )
         containers = r.json()
-    return dict(map(lambda container:(os.path.basename(container['Names'][0]),{'url':f'https://{get_traefik_host(container)}','observer_key':get_observer_key(container),'running':container['State']=='running'}),containers))
+    return dict(map(lambda container:(os.path.basename(container['Names'][0]),{'url':f'https://{get_traefik_host(container)}','observer_key':get_observer_key(container),'running':container['State']=='running','config_dir':container['Labels'].get('configdir')}),containers))
 
 def stop_instance(instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
@@ -186,9 +186,13 @@ def api_delete():
         instance=request.args['instance']
     except KeyError:
         return jsonify({"error":"instance name required"}),500
-    if instance not in get_active_instances():
+    if instance not in (instances:=get_active_instances()):
         return jsonify({"error":"instance not found"}),404
+    container=instances[instance]
     if (error:=delete_instance(instance))['success']:
+        if container['config_dir']:
+            import shutil
+            shutil.rmtree(container['config_dir'])
         return "",204
     else:
         return jsonify({"error":"failed to delete","rawError":error['rawError']}),500
