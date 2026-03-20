@@ -11,13 +11,14 @@
     integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
     crossorigin="anonymous"></script>
   <link href="/static/styles.css" rel="stylesheet" />
+  <script src="/static/form_dirty.js"></script>
 </head>
 
-<body>
+<body onbeforeunload="if(!isFormEmpty(document.querySelector('form'))){return 'true';}else{return null;}">
   <div id="navbar-peek-triggerbox"></div>
   <nav class="navbar navbar-expand-lg navbar-light bg-light competition-disabled">
     <img src="/static/favicon.ico" alt="tinkercademy logo" class="navbar-brand-logo">
-    <a class="navbar-brand" href="#">Instance Manager</a>
+    <a class="navbar-brand" href="/">Instance Manager</a>
   </nav>
   <form method="POST" enctype="multipart/form-data">
     <h1>Create New Instance</h1>
