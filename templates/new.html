@@ -14,7 +14,7 @@
   <script src="/static/form_dirty.js"></script>
 </head>
 
-<body onbeforeunload="if(!isFormEmpty(document.querySelector('form'))){return 'true';}else{return null;}">
+<body>
   <div id="navbar-peek-triggerbox"></div>
   <nav class="navbar navbar-expand-lg navbar-light bg-light competition-disabled">
     <img src="/static/favicon.ico" alt="tinkercademy logo" class="navbar-brand-logo">
@@ -32,12 +32,15 @@
     <div>
       <input type="checkbox" id="autoStart" name="autoStart">
       <label for="autoStart">Auto Start</label>
-    </div>
+    </div>  
     <input type="submit" value="Continue" />
     {% if error %}
       <h3>{{error}}</h3>
     {% endif %}
   </form>
+  <script>
+    attachSubmitButton(document.querySelector('form'));
+  </script>
 </body>
 
 </html>

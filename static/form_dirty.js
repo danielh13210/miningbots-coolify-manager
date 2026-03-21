@@ -8,3 +8,21 @@ function isFormEmpty(form) {
     }
     return true;
 }
+
+function beforeunload(form){
+    if(form.isSubmitting)return false; // skip the dialog if submitting
+    if(!isFormEmpty(form)) return true;
+    else return false;
+}
+
+function attachSubmitButton(form){
+    form.isSubmitting=false;
+    form.addEventListener("submit", function() {
+        form.isSubmitting = true;
+    });
+    window.addEventListener("beforeunload",(e)=>{
+        if(beforeunload(form)){
+            e.returnValue='dialog';
+        };
+    });
+}
