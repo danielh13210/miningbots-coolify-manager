@@ -19,7 +19,7 @@
     <img src="/static/favicon.ico" alt="tinkercademy logo" class="navbar-brand-logo">
     <a class="navbar-brand" href="/">Instance Manager</a>
   </nav>
-  <h1 class="title">Active Instances</h1>
+  <h1 class="title">Instances</h1>
   {% if instances %}
     {% for instance in instances %}
       <div class="instance-box" id="instancebox-{{instance}}">
@@ -33,7 +33,7 @@
       </div>
     {% endfor %}
   {% else %}
-    <h2 id="no-instance">No active instances.</h2>
+    <h2 id="no-instance">No instances.</h2>
   {% endif %}
   <a href="/new">New Instance</a>
 </body>
