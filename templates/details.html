@@ -22,10 +22,34 @@
   </nav>
   <h1>Details of instance {{instance}}</h1>
   {% if instances[instance]['running'] %}
-    <button onclick="stop_clicked('{{instance}}');" id="stop-{{instance}}">Stop</button>
+    <button onclick="stop_instance_clicked('{{instance}}');" id="stop-instance-{{instance}}">Stop</button>
   {% else %}
-    <button onclick="start_clicked('{{instance}}');" id="start-{{instance}}">Start</button>
+    <button onclick="start_instance_clicked('{{instance}}');" id="start-instance-{{instance}}">Start</button>
   {% endif %}
-  <button onclick="delete_clicked('{{instance}}')" {{'disabled="true" title="Instance is running, must be stopped to delete."' if instances[instance]['running']}} id="delete-{{instance}}">Delete</button>
-
+  <button onclick="delete_instance_clicked('{{instance}}')" {{'disabled="true" title="Instance is running, must be stopped to delete."' if instances[instance]['running']}} id="delete-instance-{{instance}}">Delete</button>
+  <h1>Players</h1>
+  {% if players %}
+    {% for player in players %}
+      <div class="instance-box" id="instancebox-{{instance}}">
+        <span>Player: {{player}}</span>
+        <br>
+        {% if showcred_player == player %}
+          <p>
+            User ID: {{showcred_creds['userID']}}<br>
+            Password: {{showcred_creds['password']}}<br>
+            <span style="color:red;">Warning: copy them before they're gone. You can only see them once.</span>
+          </p>
+        {% endif %}
+        <button onclick="delete_player_clicked('{{player}}','{{instance}}')" id="delete-player-{{player}}">Delete</button>
+      </div>
+    {% endfor %}
+  {% else %}
+    <h2 id="no-instance">No players.</h2>
+  {% endif %}
+  <a href="/players/new?instance={{instance}}">New Player</a>
+  {% if showcred_player %}
+    <script>
+      window.history.replaceState('','','/details?instance={{instance}}');
+    </script>
+  {% endif %}
 </body>

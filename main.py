@@ -5,6 +5,33 @@ import httpx
 import os
 import re
 
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import declarative_base
+engine=create_engine(os.environ['POSTGRES_CONNECT_URI'])
+
+Base = declarative_base()
+
+class UserEntry(Base):
+    from sqlalchemy import Column, String
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True)
+    password = Column(String, nullable=False) # not the password, the hex hash
+
+class PlayerEntry(Base):
+    from sqlalchemy import Column, String, ForeignKey, PrimaryKeyConstraint
+    __tablename__ = "players"
+
+    name = Column(String, nullable=False)
+    instance = Column(String, nullable=False)
+    uploaddir = Column(String, nullable=False)
+    ownerID = Column(String, ForeignKey("users.id"), nullable=False)
+    __table_args__ = (
+        PrimaryKeyConstraint("instance","name"),
+    )
+
+Base.metadata.create_all(engine)
+
 app = Flask(__name__)
 
 traefik_rule_matcher=re.compile(r'traefik\..*\.rule')
@@ -136,16 +163,25 @@ def home():
 
 @app.route("/details")
 def details():
+    instance=request.args['instance']
+    with engine.connect() as conn:
+        player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
+        players=[player_row[0] for player_row in player_rows]
     # Render index.html from the templates folder
-    return render_template("details.html", instance=request.args['instance'], instances=get_active_instances())
+    return render_template("details.html", instance=instance, instances=get_active_instances(),players=players)
 
 @app.route("/new",methods=['GET'])
-def new():
-    # Render new.html from templates
-    return render_template("new.html")
+def new_instance():
+    # Render new_instance.html from templates
+    return render_template("new_instance.html")
+
+@app.route("/players/new",methods=['GET'])
+def new_player():
+    # Render new_instance.html from templates
+    return render_template("new_player.html",instance=request.args.get("instance"))
 
 @app.route("/new",methods=['POST'])
-def api_new():
+def api_new_instance():
     try:
         config_zip=request.files.get('config-zip')
         config_dir=tempfile.mkdtemp()
@@ -160,8 +196,30 @@ def api_new():
         name=request.form.get('name')
         spawn_new_instance(name,config_dir,keys[0],start=request.form.get('autoStart'))
     except ConflictException:
-        return render_template("new.html",error="Docker container conflict. Please choose another name")
+        return render_template("new_instance.html",error="Docker container conflict. Please choose another name")
     return redirect("/")
+
+@app.route("/players/new",methods=['POST'])
+def api_new_player():
+    try:
+        name=request.form.get('name')
+        instance=request.form.get('instance')
+        userID=containerName=f"{instance}-{name}"
+        uploaddir=f"/tmp/{containerName}"
+        import secrets,base64
+        credentials={"userID":userID,"password":base64.b64encode(secrets.token_bytes(8)).decode()}
+        with engine.connect() as conn:
+            if conn.execute(text("SELECT * FROM players WHERE name=:name AND instance=:instance"),{"name":name,"instance":instance}).fetchone(): raise ConflictException
+            conn.execute(text("INSERT INTO users (id, password) VALUES (:id,encode(sha256((:id||:password)::bytea),'hex'))"),{"id":credentials["userID"],"password":credentials["password"]})
+            conn.execute(text("INSERT INTO players (name,instance,uploaddir,\"ownerID\") VALUES (:name,:instance,:uploaddir,:owner)"),{"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"]})
+            conn.commit()
+        os.makedirs (uploaddir,exist_ok=True)
+    except ConflictException:
+        return render_template("new_player.html",instance=instance,error="Player name conflict. Please choose another name")
+    with engine.connect() as conn:
+        player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
+        players=[player_row[0] for player_row in player_rows]
+    return render_template("details.html",instance=instance,instances=get_active_instances(),players=players,showcred_player=name,showcred_creds=credentials)
 
 
 @app.route("/favicon.ico")
@@ -169,7 +227,7 @@ def favicon():
     return redirect("/static/favicon.ico")
 
 @app.route("/stop",methods=['POST'])
-def api_stop():
+def api_stop_instance():
     try:
         instance=request.args['instance']
     except KeyError:
@@ -181,7 +239,7 @@ def api_stop():
     else:
         return jsonify({"error":"failed to stop","rawError":error['rawError']}),500
 @app.route("/delete",methods=['DELETE'])
-def api_delete():
+def api_delete_instance():
     try:
         instance=request.args['instance']
     except KeyError:
@@ -193,11 +251,38 @@ def api_delete():
         if container['config_dir']:
             import shutil
             shutil.rmtree(container['config_dir'])
+        with engine.connect() as conn:
+            ownerIDs=[]
+            for row in conn.execute(text("SELECT uploaddir, \"ownerID\" FROM players WHERE instance=:instance"),{"instance":instance}).fetchall():
+                uploaddir=row[0]
+                shutil.rmtree(uploaddir)
+                ownerIDs.append(row[1])
+            conn.execute(text("DELETE FROM players WHERE instance=:instance"),{"instance":instance})
+            for ownerID in ownerIDs:
+                conn.execute(text("DELETE FROM users WHERE id=:ownerID"),{"ownerID":ownerID})
+            conn.commit()
         return "",204
     else:
         return jsonify({"error":"failed to delete","rawError":error['rawError']}),500
+@app.route("/players/delete",methods=['DELETE'])
+def api_delete_player():
+    with engine.connect() as conn:
+        try:
+            instance=request.args['instance']
+            player=request.args['player']
+        except KeyError:
+            return jsonify({"error":"instance and player name required"}),500
+        row=conn.execute(text("SELECT uploaddir,\"ownerID\" FROM players WHERE name=:name AND instance=:instance"),{"instance":instance,"name":player}).fetchone() # fetch one, it's unique
+        if not row:
+            return jsonify({"error":"player not found on instance"}),404
+        import shutil
+        shutil.rmtree(row[0])
+        conn.execute(text("DELETE FROM players WHERE name=:name AND instance=:instance"),{"instance":instance,"name":player})
+        conn.execute(text("DELETE FROM users WHERE id=:id"),{"id":row[1]})
+        conn.commit()
+        return "",204
 @app.route("/start",methods=['POST'])
-def api_start():
+def api_start_instance():
     try:
         instance=request.args['instance']
     except KeyError:
