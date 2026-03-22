@@ -4,6 +4,7 @@ import zipfile, tarfile, stat, tempfile
 import httpx
 import os
 import re
+import argon2
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base
@@ -210,7 +211,7 @@ def api_new_player():
         credentials={"userID":userID,"password":base64.b64encode(secrets.token_bytes(8)).decode()}
         with engine.connect() as conn:
             if conn.execute(text("SELECT * FROM players WHERE name=:name AND instance=:instance"),{"name":name,"instance":instance}).fetchone(): raise ConflictException
-            conn.execute(text("INSERT INTO users (id, password) VALUES (:id,encode(sha256((:id||:password)::bytea),'hex'))"),{"id":credentials["userID"],"password":credentials["password"]})
+            conn.execute(text("INSERT INTO users (id, password) VALUES (:id,:password)"),{"id":credentials["userID"],"password":argon2.PasswordHasher().hash(credentials["password"])})
             conn.execute(text("INSERT INTO players (name,instance,uploaddir,\"ownerID\") VALUES (:name,:instance,:uploaddir,:owner)"),{"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"]})
             conn.commit()
         os.makedirs (uploaddir,exist_ok=True)
