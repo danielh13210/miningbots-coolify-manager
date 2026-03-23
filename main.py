@@ -175,5 +175,7 @@ def api_start_instance():
         return "",204
     else:
         return jsonify({"error":"failed to start","rawError":error['rawError']}),500
+@app.route("/healthcheck",methods=['GET'])
+def healthcheck(): return "",204
 
 setup_networking()

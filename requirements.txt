@@ -4,3 +4,4 @@ gunicorn
 SQLAlchemy
 psycopg2-binary
 argon2-cffi
+requests
