@@ -31,7 +31,7 @@ function stop_instance_clicked(instance){
     let button=document.getElementById(`stop-instance-${instance}`);
     button.disabled=true;
     button.innerText="Stopping...";
-    stop(instance,(success)=>{
+    stop_instance(instance,(success)=>{
         if (success) {
             location.reload();
         } else {
@@ -49,7 +49,7 @@ function start_instance_clicked(instance){
     let button=document.getElementById(`start-instance-${instance}`);
     button.disabled=true;
     button.innerText="Starting...";
-    start(instance,(success)=>{
+    start_instance(instance,(success)=>{
         if (success) {
             location.reload();
         } else {
