@@ -1,0 +1,7 @@
+{# this is a template and is not proper json #}
+{
+    "player_name": {{player_name|tojson}},
+    "player_key":{{player_key|tojson}},
+    "observer_name":"{{observer_name|tojson}}",
+    "observer_key": {{observer_key|tojson}}
+}

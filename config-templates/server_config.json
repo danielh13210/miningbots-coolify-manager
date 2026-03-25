@@ -1,0 +1,6 @@
+{# this is a template and is not proper json #}
+{
+    "hostname": {{hostname|tojson}},
+    "port": 443,
+    "security": true
+}
