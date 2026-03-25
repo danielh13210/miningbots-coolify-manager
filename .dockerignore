@@ -1,5 +1,6 @@
 .git/
 .vscode/
+__vscode__/
 .gitignore
 .dockerignore
 docker-compose.yml
