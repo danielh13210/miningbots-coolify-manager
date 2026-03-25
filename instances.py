@@ -74,6 +74,37 @@ def spawn_new_instance(name,config_dir,observer_key,start: bool=False):
             resp = client.post(start_url)
             if resp.status_code!=204: raise Exception(f"cannot start: http error {resp.status_code} {resp.json()}")
 
+def spawn_player(player,instance,instances):
+    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+        payload={
+            "Image": "miningbots-server",
+            "Labels": {
+                "player-parent-instance": instance,
+                f"traefik.http.routers.{player}-{instance}-mb.rule": f'Host("{player}-{instance}-mb.{os.environ['BASE_DOMAIN']}")',
+                f"traefik.http.routers.{player}-{instance}-mb.entrypoints": "https",
+                f"traefik.http.routers.{player}-{instance}-mb.tls": "true",
+                f"traefik.http.routers.{player}-{instance}-mb.tls.certresolver": "letsencrypt",
+                f"traefik.http.services.{player}-{instance}.loadbalancer.server.port": "9003",
+            },
+            "HostConfig": {
+                "NetworkMode": "mb-instances",
+                    "Mounts": [
+                        {
+                            "Type": "bind",
+                            "Source": rebase_path_for_docker(instances[instance]['config_dir']),
+                            "Target": "/miningbots-server/config",
+                            "ReadOnly": True
+                        }
+                    ]
+            }
+        }
+        resp = client.post(f"http://localhost/containers/create?name={player}-{instance}", json=payload)
+        if resp.status_code!=201:
+            if resp.status_code==409:
+                raise ConflictException
+            else:
+                raise Exception(f"cannot create: http error {resp.status_code} {resp.json()}")
+
 def get_traefik_host(container):
     labels=container['Labels']
     for label in labels:
@@ -118,6 +149,20 @@ def delete_instance(instance):
 def start_instance(instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         response = client.post(f"http://localhost/containers/{instance}/start",timeout=httpx.Timeout(30.0))
+
+        try:
+            content=response.json()
+        except:
+            content=None
+        return {'success':response.status_code==204,'rawError':content} # return true if success
+
+def delete_player(player,instance):
+    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+        response = client.delete(
+            f"http://localhost/containers/{player}-{instance}",
+            params={'force':'true'},
+            timeout=httpx.Timeout(30.0)
+        )
 
         try:
             content=response.json()

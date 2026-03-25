@@ -27,6 +27,7 @@ class PlayerEntry(Base):
     instance = Column(String, nullable=False)
     uploaddir = Column(String, nullable=False)
     ownerID = Column(String, ForeignKey("users.id"), nullable=False)
+    testserver = Column(String, nullable=False)
     __table_args__ = (
         PrimaryKeyConstraint("instance","name"),
     )
@@ -34,8 +35,6 @@ class PlayerEntry(Base):
 Base.metadata.create_all(engine)
 
 app = Flask(__name__)
-
-
 
 @app.route("/")
 def home():
@@ -82,6 +81,7 @@ def api_new_instance():
 
 @app.route("/players/new",methods=['POST'])
 def api_new_player():
+    instances=get_active_instances()
     try:
         name=request.form.get('name')
         instance=request.form.get('instance')
@@ -92,7 +92,7 @@ def api_new_player():
         with engine.connect() as conn:
             if conn.execute(text("SELECT * FROM players WHERE name=:name AND instance=:instance"),{"name":name,"instance":instance}).fetchone(): raise ConflictException
             conn.execute(text("INSERT INTO users (id, password) VALUES (:id,:password)"),{"id":credentials["userID"],"password":argon2.PasswordHasher().hash(credentials["password"])})
-            conn.execute(text("INSERT INTO players (name,instance,uploaddir,\"ownerID\") VALUES (:name,:instance,:uploaddir,:owner)"),{"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"]})
+            conn.execute(text("INSERT INTO players (name,instance,uploaddir,\"ownerID\",testserver) VALUES (:name,:instance,:uploaddir,:owner,:testserver)"),{"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}'})
             conn.commit()
         os.makedirs (uploaddir,exist_ok=True)
     except ConflictException:
@@ -100,7 +100,8 @@ def api_new_player():
     with engine.connect() as conn:
         player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
         players=[player_row[0] for player_row in player_rows]
-    return render_template("details.html",instance=instance,instances=get_active_instances(),players=players,showcred_player=name,showcred_creds=credentials)
+    spawn_player(name,instance,instances)
+    return render_template("details.html",instance=instance,instances=instances,players=players,showcred_player=name,showcred_creds=credentials)
 
 
 @app.route("/favicon.ico")
@@ -134,14 +135,16 @@ def api_delete_instance():
             shutil.rmtree(container['config_dir'])
         with engine.connect() as conn:
             ownerIDs=[]
-            for row in conn.execute(text("SELECT uploaddir, \"ownerID\" FROM players WHERE instance=:instance"),{"instance":instance}).fetchall():
-                uploaddir=row[0]
+            for row in conn.execute(text("SELECT name, instance, uploaddir, \"ownerID\" FROM players WHERE instance=:instance"),{"instance":instance}).fetchall():
+                uploaddir=row[2]
                 shutil.rmtree(uploaddir)
-                ownerIDs.append(row[1])
+                delete_player(row[0],row[1])
+                ownerIDs.append(row[3])
             conn.execute(text("DELETE FROM players WHERE instance=:instance"),{"instance":instance})
             for ownerID in ownerIDs:
                 conn.execute(text("DELETE FROM users WHERE id=:ownerID"),{"ownerID":ownerID})
             conn.commit()
+
         return "",204
     else:
         return jsonify({"error":"failed to delete","rawError":error['rawError']}),500
@@ -156,6 +159,8 @@ def api_delete_player():
         row=conn.execute(text("SELECT uploaddir,\"ownerID\" FROM players WHERE name=:name AND instance=:instance"),{"instance":instance,"name":player}).fetchone() # fetch one, it's unique
         if not row:
             return jsonify({"error":"player not found on instance"}),404
+        if not (error:=delete_player(player,instance))['success']:
+            return jsonify({"error":"failed to delete test server","rawError":error['rawError']}),500
         import shutil
         shutil.rmtree(row[0])
         conn.execute(text("DELETE FROM players WHERE name=:name AND instance=:instance"),{"instance":instance,"name":player})
