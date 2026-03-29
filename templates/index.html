@@ -28,14 +28,14 @@
           <span class="running">Running</span>
         {% endif %}
         <br>
-        <a href="{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}" target="_blank">Open Frontend</a>
-        <a href="/details?instance={{instance}}">More...</a>
+        <button class="btn btn-primary" {{'disabled="true" title="Instance is not running"' if not instances[instance]["running"] else ''}} onclick="window.open('{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}', '_blank')">Open Frontend</button>
+        <button class="btn btn-secondary" onclick="window.open('/details?instance={{instance}}', '_self')">More...</button>
       </div>
     {% endfor %}
   {% else %}
     <h2 id="no-instance">No instances.</h2>
   {% endif %}
-  <a href="/new">New Instance</a>
+  <button class="btn btn-primary" onclick="window.open('/new', '_self')">New Instance</button>
 </body>
 
 </html>
