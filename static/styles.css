@@ -20,3 +20,13 @@ h1.title {
 .running {
   color:gray;
 }
+
+.btn img {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.instances-row {
+  display: flex !important;
+  flex-direction: row !important;
+}

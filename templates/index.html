@@ -19,7 +19,10 @@
     <img src="/static/favicon.ico" alt="tinkercademy logo" class="navbar-brand-logo">
     <a class="navbar-brand" href="/">Instance Manager</a>
   </nav>
-  <h1 class="title">Instances</h1>
+  <div class="instances-row">
+    <h1 class="title">Instances</h1>
+    <button class="btn" onclick="window.open('/new', '_self')" ><img src="/static/add.svg" alt="New Instance"></button>
+  </div>
   {% if instances %}
     {% for instance in instances %}
       <div class="instance-box" id="instancebox-{{instance}}">
@@ -35,7 +38,6 @@
   {% else %}
     <h2 id="no-instance">No instances.</h2>
   {% endif %}
-  <button class="btn btn-primary" onclick="window.open('/new', '_self')">New Instance</button>
 </body>
 
 </html>
