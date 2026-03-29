@@ -26,7 +26,22 @@
   {% else %}
     <button class="btn btn-primary" onclick="start_instance_clicked('{{instance}}');" id="start-instance-{{instance}}">Start</button>
   {% endif %}
-  <button class="btn btn-danger" onclick="delete_instance_clicked('{{instance}}')" {{'disabled="true" title="Instance is running, must be stopped to delete."' if instances[instance]['running']}} id="delete-instance-{{instance}}">Delete</button>
+  <span
+    {% if instances[instance]["running"] %}
+      title="Instance must be stopped before it can be deleted."
+    {% endif %}
+  >
+    <button 
+      class="btn btn-danger"
+      onclick="delete_instance_clicked('{{instance}}')"
+      id="delete-instance-{{instance}}"
+      {% if instances[instance]["running"] %}
+        disabled
+      {% endif %}
+    >
+      Delete
+    </button>
+  </span>
   <h1>Players</h1>
   {% if players %}
     {% for player in players %}

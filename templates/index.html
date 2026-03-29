@@ -31,13 +31,26 @@
           <span class="running">Running</span>
         {% endif %}
         <br>
-        <button class="btn btn-primary" {{'disabled="true" title="Instance is not running"' if not instances[instance]["running"] else ''}} onclick="window.open('{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}', '_blank')">Open Frontend</button>
+        <span
+          {% if not instances[instance]["running"] %}
+            title="Instance is not running, start it to open the frontend."
+          {% endif %}
+        >
+          <button class="btn btn-primary"
+            {% if not instances[instance]["running"] %}
+              disabled
+            {% endif %}
+            onclick="window.open('{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}', '_blank')">
+              Open Frontend
+          </button>
+        </span>
         <button class="btn btn-secondary" onclick="window.open('/details?instance={{instance}}', '_self')">More...</button>
       </div>
     {% endfor %}
   {% else %}
     <h2 id="no-instance">No instances.</h2>
   {% endif %}
+  <script src="/static/tooltip.js"></script>
 </body>
 
 </html>
