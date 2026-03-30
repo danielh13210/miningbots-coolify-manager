@@ -150,6 +150,10 @@ def api_new_player():
             conn.execute(text("INSERT INTO users (id, password) VALUES (:id,:password)"),{"id":credentials["userID"],"password":argon2.PasswordHasher().hash(credentials["password"])})
             conn.execute(text("INSERT INTO players (name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key) VALUES (:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key)"),{"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key})
             conn.commit()
+        with zipfile.ZipFile(os.path.join(uploaddir,"configPack.zip"),mode='w') as configpack:
+            with configpack.open('server_config.json','w') as scfile:
+                  scfile.write(format_config_template('server_config.json',hostname=url_to_hostname.search(instances[instance]['url'])).group(1))
+                  
         os.makedirs (uploaddir,exist_ok=True)
     except ConflictException:
         return render_template("new_player.html",instance=instance,error="Player name conflict. Please choose another name")
