@@ -2,7 +2,6 @@ from flask import Flask, render_template, redirect, request, jsonify
 import json
 import zipfile, tempfile
 import os
-import re
 import argon2
 from instances import *
 
