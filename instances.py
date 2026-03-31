@@ -63,7 +63,9 @@ def spawn_new_instance(name,config_dir,observer_key,start: bool=False):
                     ]
             }
         }
-        resp = client.post(f"http://localhost/containers/create?name={name}", json=payload)
+        resp = client.post(f"http://localhost/containers/create",
+                           params={"name":name},
+                           json=payload)
         if resp.status_code!=201:
             if resp.status_code==409:
                 raise ConflictException
@@ -100,7 +102,9 @@ def spawn_player(player,instance,instances):
                     ]
             }
         }
-        resp = client.post(f"http://localhost/containers/create?name={player}-{instance}", json=payload)
+        resp = client.post(f"http://localhost/containers/create",
+                           params={"name":f"{instance}-{player}"},
+                           json=payload)
         if resp.status_code!=201:
             if resp.status_code==409:
                 raise ConflictException
