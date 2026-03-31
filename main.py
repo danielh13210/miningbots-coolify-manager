@@ -156,9 +156,14 @@ def api_new_player():
             conn.execute(text("INSERT INTO users (id, password) VALUES (:id,:password)"),{"id":credentials["userID"],"password":argon2.PasswordHasher().hash(credentials["password"])})
             conn.execute(text("INSERT INTO players (name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key) VALUES (:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key)"),{"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key})
             conn.commit()
-        with zipfile.ZipFile(os.path.join(uploaddir,"configPack.zip"),mode='w') as configpack:
+        with zipfile.ZipFile(os.path.join(uploaddir,"testpack.zip"),mode='w') as configpack:
             with configpack.open('server_config.json','w') as scfile:
                 scfile.write(format_config_template('server_config.json',hostname=f'{name}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
+            with configpack.open('player_config.json','w') as pcfile:
+                pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
+        with zipfile.ZipFile(os.path.join(uploaddir,"comppack.zip"),mode='w') as configpack:
+            with configpack.open('server_config.json','w') as scfile:
+                scfile.write(format_config_template('server_config.json',hostname=f'{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
             with configpack.open('player_config.json','w') as pcfile:
                 pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
         os.makedirs (uploaddir,exist_ok=True)
