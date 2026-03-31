@@ -4,6 +4,7 @@ import zipfile, tempfile
 import os
 import argon2
 from instances import *
+import jinja2
 
 class NoKeysException(RuntimeError): pass
 
@@ -65,6 +66,10 @@ class ObserverKeys(Base):
     )
 
 Base.metadata.create_all(engine)
+
+config_templates=jinja2.Environment(loader=jinja2.FileSystemLoader('config-templates'))
+def format_config_template(file, **kwargs):
+    return config_templates.get_template(file).render(**kwargs)
 
 app = Flask(__name__)
 
@@ -131,6 +136,7 @@ def api_new_player():
         instance=request.form.get('instance')
         userID=containerName=f"{instance}-{name}"
         uploaddir=f"/tmp/{containerName}"
+        os.makedirs(uploaddir)
         import secrets,base64
         credentials={"userID":userID,"password":base64.b64encode(secrets.token_bytes(8)).decode()}
         with engine.connect() as conn:
@@ -150,6 +156,11 @@ def api_new_player():
             conn.execute(text("INSERT INTO users (id, password) VALUES (:id,:password)"),{"id":credentials["userID"],"password":argon2.PasswordHasher().hash(credentials["password"])})
             conn.execute(text("INSERT INTO players (name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key) VALUES (:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key)"),{"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key})
             conn.commit()
+        with zipfile.ZipFile(os.path.join(uploaddir,"configPack.zip"),mode='w') as configpack:
+            with configpack.open('server_config.json','w') as scfile:
+                scfile.write(format_config_template('server_config.json',hostname=f'{name}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
+            with configpack.open('player_config.json','w') as pcfile:
+                pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
         os.makedirs (uploaddir,exist_ok=True)
     except ConflictException:
         return render_template("new_player.html",instance=instance,error="Player name conflict. Please choose another name")
