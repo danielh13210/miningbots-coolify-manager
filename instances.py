@@ -83,11 +83,11 @@ def spawn_player(player,instance,instances):
             "Labels": {
                 "player-parent-instance": instance,
                 "traefik.enable": "true",
-                f"traefik.http.routers.{player}-{instance}-mb.rule": f'Host("{player}-{instance}-mb.{os.environ['BASE_DOMAIN']}")',
-                f"traefik.http.routers.{player}-{instance}-mb.entrypoints": "https",
-                f"traefik.http.routers.{player}-{instance}-mb.tls": "true",
-                f"traefik.http.routers.{player}-{instance}-mb.tls.certresolver": "letsencrypt",
-                f"traefik.http.services.{player}-{instance}.loadbalancer.server.port": "9003",
+                f"traefik.http.routers.{instance}-{player}-mb.rule": f'Host("{player}-{instance}-mb.{os.environ['BASE_DOMAIN']}")',
+                f"traefik.http.routers.{instance}-{player}-mb.entrypoints": "https",
+                f"traefik.http.routers.{instance}-{player}-mb.tls": "true",
+                f"traefik.http.routers.{instance}-{player}-mb.tls.certresolver": "letsencrypt",
+                f"traefik.http.services.{instance}-{player}.loadbalancer.server.port": "9003",
                 "observer_key": instances[instance]['observer_key']
             },
             "HostConfig": {
