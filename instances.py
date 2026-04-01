@@ -165,7 +165,7 @@ def start_instance(instance):
 def delete_player(player,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         response = client.delete(
-            f"http://localhost/containers/{player}-{instance}",
+            f"http://localhost/containers/{instance}-{player}",
             params={'force':'true'},
             timeout=httpx.Timeout(30.0)
         )
