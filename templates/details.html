@@ -31,7 +31,7 @@
       title="Instance must be stopped before it can be deleted."
     {% endif %}
   >
-    <button 
+    <button
       class="btn btn-danger"
       onclick="delete_instance_clicked('{{instance}}')"
       id="delete-instance-{{instance}}"
@@ -61,7 +61,11 @@
   {% else %}
     <h2 id="no-instance">No players.</h2>
   {% endif %}
-  <a href="/players/new?instance={{instance}}">New Player</a>
+  {% if nocorrupt %}
+    <a href="/players/new?instance={{instance}}">New Player</a>
+  {% else %}
+    Player creation is unavailable due to an error: {{corrupt_error}}
+  {% endif %}
   {% if showcred_player %}
     <script>
       window.history.replaceState('','','/details?instance={{instance}}');

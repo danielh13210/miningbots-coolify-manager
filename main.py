@@ -7,6 +7,7 @@ from instances import *
 import jinja2
 
 class NoKeysException(RuntimeError): pass
+class ConfigError(TypeError): pass
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base
@@ -85,7 +86,10 @@ def details():
         player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
         players=[player_row[0] for player_row in player_rows]
     # Render index.html from the templates folder
-    return render_template("details.html", instance=instance, instances=get_active_instances(),players=players)
+    instances=get_active_instances()
+    if not os.path.isdir(instances[instance]['config_dir']):
+        return render_template("details.html", instance=instance, instances=instances,players=players,nocorrupt=False,corrupt_error="cannot find config dir for instance, please recreate this instance")
+    return render_template("details.html", instance=instance, instances=instances,players=players,nocorrupt=True)
 
 @app.route("/new",methods=['GET'])
 def new_instance():
@@ -112,20 +116,23 @@ def api_new_instance():
         keyfile.close()
         name=request.form.get('name')
         with engine.connect() as conn:
+            conn.begin()
             for key in observer_keys:
+                if not isinstance(key,int): raise ConfigError("observer_keys.json: non-integer found")
                 conn.execute(text('INSERT INTO observer_keys (instance,observer_key) VALUES (:instance,:observer_key)'),{'instance':name,'observer_key':key})
             conn.execute(text('UPDATE observer_keys SET used=TRUE WHERE instance=:instance AND observer_key=:observer_key'),{'instance':name,'observer_key':observer_keys[0]})
-            conn.commit()
-        keyfile=open(os.path.join(config_dir,'player_keys.json'),'r')
-        player_keys=json.load(keyfile)
-        keyfile.close()
-        with engine.connect() as conn:
+            keyfile=open(os.path.join(config_dir,'player_keys.json'),'r')
+            player_keys=json.load(keyfile)
+            keyfile.close()
             for key in player_keys:
+                if not isinstance(key,int): raise ConfigError("player_keys.json: non-integer found")
                 conn.execute(text('INSERT INTO player_keys(instance,player_key) VALUES (:instance,:player_key)'),{'instance':name,'player_key':key})
             conn.commit()
         spawn_new_instance(name,config_dir,observer_keys[0],start=request.form.get('autoStart'))
     except ConflictException:
         return render_template("new_instance.html",error="Docker container conflict. Please choose another name")
+    except ConfigError as e:
+        return render_template("new_instance.html",error=f"Configuration error: {e.args[0]}")
     return redirect("/")
 
 @app.route("/players/new",methods=['POST'])
@@ -140,6 +147,7 @@ def api_new_player():
         import secrets,base64
         credentials={"userID":userID,"password":base64.b64encode(secrets.token_bytes(8)).decode()}
         with engine.connect() as conn:
+            conn.begin()
             if conn.execute(text("SELECT * FROM players WHERE name=:name AND instance=:instance"),{"name":name,"instance":instance}).fetchone(): raise ConflictException
             player_key=conn.execute(text("SELECT player_key FROM player_keys WHERE instance=:instance AND used=FALSE"),{"instance":instance}).fetchone()
             if player_key:
@@ -204,10 +212,11 @@ def api_delete_instance():
         return jsonify({"error":"instance not found"}),404
     container=instances[instance]
     if (error:=delete_instance(instance))['success']:
-        if container['config_dir']:
+        if container['config_dir'] and os.path.isdir(container['config_dir']):
             import shutil
             shutil.rmtree(container['config_dir'])
         with engine.connect() as conn:
+            conn.begin()
             ownerIDs=[]
             player_keys=[]
             observer_keys=[]
@@ -234,6 +243,7 @@ def api_delete_instance():
 @app.route("/players/delete",methods=['DELETE'])
 def api_delete_player():
     with engine.connect() as conn:
+        conn.begin()
         try:
             instance=request.args['instance']
             player=request.args['player']
