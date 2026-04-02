@@ -231,10 +231,8 @@ def api_delete_instance():
             for ownerID in ownerIDs:
                 conn.execute(text("DELETE FROM users WHERE id=:ownerID"),{"ownerID":ownerID})
             # reclaim the keys
-            for player_key in player_keys:
-                conn.execute(text("UPDATE player_keys SET used=FALSE WHERE instance=:instance AND player_key=:player_key"),{"instance":instance,"player_key":player_key})
-            for observer_key in observer_keys:
-                conn.execute(text("UPDATE observer_keys SET used=FALSE WHERE instance=:instance AND observer_key=:observer_key"),{"instance":instance,"observer_key":observer_key})
+            conn.execute(text("DELETE FROM player_keys WHERE instance=:instance"),{"instance":instance})
+            conn.execute(text("DELETE FROM observer_keys WHERE instance=:instance"),{"instance":instance})
             conn.commit()
 
         return "",204
