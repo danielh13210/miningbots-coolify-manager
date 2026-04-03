@@ -81,12 +81,17 @@ def home():
 
 @app.route("/details")
 def details():
-    instance=request.args['instance']
+    try:
+        instance=request.args['instance']
+    except KeyError:
+        return "Instance required",400
+    instances=get_active_instances()
+    if instance not in instances:
+        return "Instance not found",404
     with engine.connect() as conn:
         player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
         players=[player_row[0] for player_row in player_rows]
     # Render index.html from the templates folder
-    instances=get_active_instances()
     if not os.path.isdir(instances[instance]['config_dir']):
         return render_template("details.html", instance=instance, instances=instances,players=players,nocorrupt=False,corrupt_error="cannot find config dir for instance, please recreate this instance")
     return render_template("details.html", instance=instance, instances=instances,players=players,nocorrupt=True)
@@ -142,6 +147,10 @@ def api_new_player():
         name=request.form.get('name')
         instance=request.form.get('instance')
         userID=containerName=f"{instance}-{name}"
+        if not (name and instance):
+            return render_template("new_player.html",instance=instance,error="Player name and instance name required")
+        if instance not in instances:
+            return render_template("new_player.html",instance=instance,error="Instance not found")
         uploaddir=f"/tmp/{containerName}"
         os.makedirs(uploaddir)
         import secrets,base64
