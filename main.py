@@ -183,7 +183,7 @@ def api_new_player():
         player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
         players=[player_row[0] for player_row in player_rows]
     spawn_player(name,instance,instances)
-    return render_template("details.html",instance=instance,instances=instances,players=players,showcred_player=name,showcred_creds=credentials)
+    return render_template("details.html",instance=instance,instances=instances,players=players,showcred_player=name,showcred_creds=credentials,nocorrupt=True)
 
 
 @app.route("/favicon.ico")
