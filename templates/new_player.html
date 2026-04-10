@@ -26,7 +26,7 @@
     <div>
         <label for="name">Player Name</label>
         <input type="hidden" id="instance" name="instance" value="{{instance}}">
-        <input type="text" id="name" name="name" pattern="[a-zA-Z0-9_\.\-]+" title="Only letters, numbers, dashes, periods, and underscores allowed." maxlength="{{64-(instance|length+1)}}" required/>
+        <input type="text" id="name" name="name" pattern="[a-zA-Z0-9_\-]+" title="Only letters, numbers, dashes, and underscores allowed." maxlength="{{64-(instance|length+1)-(username|length+1)}}" required/>
     </div>
     <input type="submit" value="Continue" />
     {% if error %}

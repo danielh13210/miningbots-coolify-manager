@@ -36,7 +36,7 @@ def rebase_path_for_docker(path):
     relative_path = original_file.relative_to(old_base)
     return (new_base / relative_path).as_posix()
 
-def spawn_new_instance(name,config_dir,observer_key,start: bool=False):
+def spawn_new_instance(username,name,config_dir,observer_key,start: bool=False):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         payload={
             "Image": "miningbots-server",
@@ -44,11 +44,11 @@ def spawn_new_instance(name,config_dir,observer_key,start: bool=False):
                 "miningbots-app-instance": "",
                 "observer_key": str(observer_key),
                 "traefik.enable": "true",
-                f"traefik.http.routers.{name}-mb.rule": f'Host("{name}-mb.{os.environ['BASE_DOMAIN']}")',
-                f"traefik.http.routers.{name}-mb.entrypoints": "https",
-                f"traefik.http.routers.{name}-mb.tls": "true",
-                f"traefik.http.routers.{name}-mb.tls.certresolver": "letsencrypt",
-                f"traefik.http.services.{name}.loadbalancer.server.port": "9003",
+                f"traefik.http.routers.{username}-{name}-mb.rule": f'Host("{username}-{name}-mb.{os.environ['BASE_DOMAIN']}")',
+                f"traefik.http.routers.{username}-{name}-mb.entrypoints": "https",
+                f"traefik.http.routers.{username}-{name}-mb.tls": "true",
+                f"traefik.http.routers.{username}-{name}-mb.tls.certresolver": "letsencrypt",
+                f"traefik.http.services.{username}-{name}.loadbalancer.server.port": "9003",
                 "configdir":config_dir
             },
             "HostConfig": {
@@ -64,7 +64,7 @@ def spawn_new_instance(name,config_dir,observer_key,start: bool=False):
             }
         }
         resp = client.post(f"http://localhost/containers/create",
-                           params={"name":name},
+                           params={"name":f"{username}-{name}"},
                            json=payload)
         if resp.status_code!=201:
             if resp.status_code==409:
@@ -72,21 +72,21 @@ def spawn_new_instance(name,config_dir,observer_key,start: bool=False):
             else:
                 raise Exception(f"cannot create: http error {resp.status_code} {resp.json()}")
         if start:
-            start_url = f"http://localhost/containers/{name}/start"
+            start_url = f"http://localhost/containers/{username}-{name}/start"
             resp = client.post(start_url)
             if resp.status_code!=204: raise Exception(f"cannot start: http error {resp.status_code} {resp.json()}")
 
-def spawn_player(player,instance,instances):
+def spawn_player(username, player, instance, instances):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         payload={
             "Image": "miningbots-server",
             "Labels": {
                 "traefik.enable": "true",
-                f"traefik.http.routers.{instance}-{player}-mb.rule": f'Host("{player}-{instance}-mb.{os.environ['BASE_DOMAIN']}")',
-                f"traefik.http.routers.{instance}-{player}-mb.entrypoints": "https",
-                f"traefik.http.routers.{instance}-{player}-mb.tls": "true",
-                f"traefik.http.routers.{instance}-{player}-mb.tls.certresolver": "letsencrypt",
-                f"traefik.http.services.{instance}-{player}.loadbalancer.server.port": "9003",
+                f"traefik.http.routers.{username}-{instance}-{player}-mb.rule": f'Host("{username}-{instance}-{player}-mb.{os.environ['BASE_DOMAIN']}")',
+                f"traefik.http.routers.{username}-{instance}-{player}-mb.entrypoints": "https",
+                f"traefik.http.routers.{username}-{instance}-{player}-mb.tls": "true",
+                f"traefik.http.routers.{username}-{instance}-{player}-mb.tls.certresolver": "letsencrypt",
+                f"traefik.http.services.{username}-{instance}-{player}.loadbalancer.server.port": "9003",
                 "observer_key": instances[instance]['observer_key']
             },
             "HostConfig": {
@@ -102,7 +102,7 @@ def spawn_player(player,instance,instances):
             }
         }
         resp = client.post(f"http://localhost/containers/create",
-                           params={"name":f"{instance}-{player}"},
+                           params={"name":f"{username}-{instance}-{player}"},
                            json=payload)
         if resp.status_code!=201:
             if resp.status_code==409:
@@ -123,37 +123,37 @@ def get_traefik_host(container):
 def get_observer_key(container):
     return container['Labels']['observer_key']
 
-def get_active_instances():
+def get_active_instances(username):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         # Filter for containers that have the label "miningbots-app-instance"
         r = client.get(
             "http://localhost/containers/json",
-            params={"filters": '{"label":["miningbots-app-instance"]}',"all":'true'}
+            params={"filters": f'{{"label":["miningbots-app-instance"],"name":["^{username}-.*"]}}',"all":'true'}
         )
         containers = r.json()
-    return dict(map(lambda container:(os.path.basename(container['Names'][0]),{'url':f'https://{get_traefik_host(container)}','observer_key':get_observer_key(container),'running':container['State']=='running','config_dir':container['Labels'].get('configdir')}),containers))
+    return dict(map(lambda container:(os.path.basename(container['Names'][0])[len(username)+1:],{'url':f'https://{get_traefik_host(container)}','observer_key':get_observer_key(container),'running':container['State']=='running','config_dir':container['Labels'].get('configdir')}),containers))
 
-def stop_instance(instance):
+def stop_instance(username,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        response = client.post(f"http://localhost/containers/{instance}/stop",timeout=httpx.Timeout(30.0))
+        response = client.post(f"http://localhost/containers/{username}-{instance}/stop",timeout=httpx.Timeout(30.0))
 
         try:
             content=response.json()
         except:
             content=None
         return {'success':response.status_code==204,'rawError':content} # return true if success
-def delete_instance(instance):
+def delete_instance(username,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        response = client.delete(f"http://localhost/containers/{instance}",timeout=httpx.Timeout(30.0))
+        response = client.delete(f"http://localhost/containers/{username}-{instance}",timeout=httpx.Timeout(30.0))
 
         try:
             content=response.json()
         except:
             content=None
         return {'success':response.status_code==204,'rawError':content} # return true if success
-def start_instance(instance):
+def start_instance(username,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        response = client.post(f"http://localhost/containers/{instance}/start",timeout=httpx.Timeout(30.0))
+        response = client.post(f"http://localhost/containers/{username}-{instance}/start",timeout=httpx.Timeout(30.0))
 
         try:
             content=response.json()
@@ -161,10 +161,10 @@ def start_instance(instance):
             content=None
         return {'success':response.status_code==204,'rawError':content} # return true if success
 
-def delete_player(player,instance):
+def delete_player(username,player,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         response = client.delete(
-            f"http://localhost/containers/{instance}-{player}",
+            f"http://localhost/containers/{username}-{instance}-{player}",
             params={'force':'true'},
             timeout=httpx.Timeout(30.0)
         )

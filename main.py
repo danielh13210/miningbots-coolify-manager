@@ -77,7 +77,7 @@ app = Flask(__name__)
 @app.route("/")
 def home():
     # Render index.html from the templates folder
-    return render_template("index.html", instances=get_active_instances(), frontend_url=os.environ['fe_host'])
+    return render_template("index.html", instances=get_active_instances('todo'), frontend_url=os.environ['fe_host'])
 
 @app.route("/details")
 def details():
@@ -85,7 +85,7 @@ def details():
         instance=request.args['instance']
     except KeyError:
         return "Instance required",400
-    instances=get_active_instances()
+    instances=get_active_instances('todo')
     if instance not in instances:
         return "Instance not found",404
     with engine.connect() as conn:
@@ -99,12 +99,12 @@ def details():
 @app.route("/new",methods=['GET'])
 def new_instance():
     # Render new_instance.html from templates
-    return render_template("new_instance.html")
+    return render_template("new_instance.html",username='todo')
 
 @app.route("/players/new",methods=['GET'])
 def new_player():
     # Render new_instance.html from templates
-    return render_template("new_player.html",instance=request.args.get("instance"))
+    return render_template("new_player.html",instance=request.args.get("instance"), username='todo')
 
 @app.route("/new",methods=['POST'])
 def api_new_instance():
@@ -133,7 +133,7 @@ def api_new_instance():
                 if not isinstance(key,int): raise ConfigError("player_keys.json: non-integer found")
                 conn.execute(text('INSERT INTO player_keys(instance,player_key) VALUES (:instance,:player_key)'),{'instance':name,'player_key':key})
             conn.commit()
-        spawn_new_instance(name,config_dir,observer_keys[0],start=request.form.get('autoStart'))
+        spawn_new_instance('todo',name,config_dir,observer_keys[0],start=request.form.get('autoStart'))
     except ConflictException:
         return render_template("new_instance.html",error="Docker container conflict. Please choose another name")
     except ConfigError as e:
@@ -142,11 +142,11 @@ def api_new_instance():
 
 @app.route("/players/new",methods=['POST'])
 def api_new_player():
-    instances=get_active_instances()
+    instances=get_active_instances('todo')
     try:
         name=request.form.get('name')
         instance=request.form.get('instance')
-        userID=containerName=f"{instance}-{name}"
+        userID=containerName=f"{'todo'}-{instance}-{name}"
         if not (name and instance):
             return render_template("new_player.html",instance=instance,error="Player name and instance name required")
         if instance not in instances:
@@ -191,7 +191,7 @@ def api_new_player():
     with engine.connect() as conn:
         player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
         players=[player_row[0] for player_row in player_rows]
-    spawn_player(name,instance,instances)
+    spawn_player('todo',name,instance,instances)
     return render_template("details.html",instance=instance,instances=instances,players=players,showcred_player=name,showcred_creds=credentials,nocorrupt=True)
 
 
@@ -232,7 +232,7 @@ def api_delete_instance():
             for row in conn.execute(text("SELECT name, instance, uploaddir, \"ownerID\", player_key, observer_key FROM players WHERE instance=:instance"),{"instance":instance}).fetchall():
                 uploaddir=row[2]
                 shutil.rmtree(uploaddir)
-                delete_player(row[0],row[1])
+                delete_player('todo',row[0],row[1])
                 ownerIDs.append(row[3])
                 player_keys.append(row[4])
                 observer_keys.append(row[5])
@@ -259,7 +259,7 @@ def api_delete_player():
         row=conn.execute(text("SELECT uploaddir,\"ownerID\",player_key,observer_key FROM players WHERE name=:name AND instance=:instance"),{"instance":instance,"name":player}).fetchone() # fetch one, it's unique
         if not row:
             return jsonify({"error":"player not found on instance"}),404
-        if not (error:=delete_player(player,instance))['success']:
+        if not (error:=delete_player('todo',player,instance))['success']:
             return jsonify({"error":"failed to delete test server","rawError":error['rawError']}),500
         import shutil
         shutil.rmtree(row[0])
