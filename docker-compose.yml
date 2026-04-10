@@ -13,6 +13,7 @@ services:
       - fe_host=${fe_host:?}
       - BASE_DOMAIN=${BASE_DOMAIN:?}
       - POSTGRES_CONNECT_URI=${POSTGRES_CONNECT_URI:?}
+      - SECRET_KEY=${SECRET_KEY:?}
     healthcheck:
       test: ["CMD", "python3", "healthcheck.py"]
       interval: 1m30s

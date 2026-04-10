@@ -30,3 +30,12 @@ h1.title {
   display: flex !important;
   flex-direction: row !important;
 }
+
+#logout-button {
+  color: black;
+  text-decoration: none;
+}
+
+.icon {
+  height: 20px;
+}
