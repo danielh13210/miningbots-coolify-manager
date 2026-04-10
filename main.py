@@ -280,7 +280,6 @@ def api_delete_instance():
     if (error:=delete_instance(current_user.id,instance))['success']:
         import shutil
         if container['config_dir'] and os.path.isdir(container['config_dir']):
-            import shutil
             shutil.rmtree(container['config_dir'])
         with engine.connect() as conn:
             conn.begin()
