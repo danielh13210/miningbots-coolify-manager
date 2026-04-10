@@ -221,8 +221,8 @@ def api_delete_instance():
         return jsonify({"error":"instance not found"}),404
     container=instances[instance]
     if (error:=delete_instance(instance))['success']:
+        import shutil
         if container['config_dir'] and os.path.isdir(container['config_dir']):
-            import shutil
             shutil.rmtree(container['config_dir'])
         with engine.connect() as conn:
             conn.begin()
