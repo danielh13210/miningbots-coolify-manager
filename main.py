@@ -263,7 +263,7 @@ def api_stop_instance():
         return jsonify({"error":"instance name required"}),500
     if instance not in get_active_instances(current_user.id):
         return jsonify({"error":"instance not found"}),404
-    if (error:=stop_instance(instance))['success']:
+    if (error:=stop_instance(current_user.id,instance))['success']:
         return "",204
     else:
         return jsonify({"error":"failed to stop","rawError":error['rawError']}),500
@@ -336,7 +336,7 @@ def api_start_instance():
         return jsonify({"error":"instance name required"}),500
     if instance not in get_active_instances(current_user.id):
         return jsonify({"error":"instance not found"}),404
-    if (error:=start_instance(instance))['success']:
+    if (error:=start_instance(current_user.id,instance))['success']:
         return "",204
     else:
         return jsonify({"error":"failed to start","rawError":error['rawError']}),500
