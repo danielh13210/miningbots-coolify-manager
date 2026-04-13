@@ -170,6 +170,7 @@ def api_new_instance():
             shutil.copy(os.path.join('mixin-config',mixin_file),config_dir)
         with zipfile.ZipFile(config_zip, 'r') as zip_device:
             safe_extract(zip_device, config_dir)
+        if not (os.path.isfile(os.path.join(config_dir,'observer_keys.json')) and os.path.isfile(os.path.join(config_dir,'player_keys.json'))): raise ConfigError("Required config files not found in zip")
         keyfile=open(os.path.join(config_dir,'observer_keys.json'),'r')
         observer_keys=json.load(keyfile)
         keyfile.close()
