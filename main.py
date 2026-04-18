@@ -173,7 +173,10 @@ def api_new_instance():
         keypath=os.path.join(config_dir,'observer_keys.json')
         if not os.path.isfile(keypath): raise ConfigError("required files not found: observer_keys.json")
         keyfile=open(keypath,'r')
-        observer_keys=json.load(keyfile)
+        try:
+            observer_keys=json.load(keyfile)
+        except:
+            raise ConfigError('observer_keys.json: invalid JSON')
         keyfile.close()
         name=request.form.get('name')
         with engine.connect() as conn:
@@ -185,7 +188,10 @@ def api_new_instance():
             keypath=os.path.join(config_dir,'player_keys.json')
             if not os.path.isfile(keypath): raise ConfigError("required files not found: player_keys.json")
             keyfile=open(keypath,'r')
-            player_keys=json.load(keyfile)
+            try:
+                player_keys=json.load(keyfile)
+            except:
+                raise ConfigError('player_keys.json: invalid JSON')
             keyfile.close()
             for key in player_keys:
                 if not isinstance(key,int): raise ConfigError("player_keys.json: non-integer found")
