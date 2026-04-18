@@ -170,7 +170,9 @@ def api_new_instance():
             shutil.copy(os.path.join('mixin-config',mixin_file),config_dir)
         with zipfile.ZipFile(config_zip, 'r') as zip_device:
             safe_extract(zip_device, config_dir)
-        keyfile=open(os.path.join(config_dir,'observer_keys.json'),'r')
+        keypath=os.path.join(config_dir,'observer_keys.json')
+        if not os.path.isfile(keypath): raise ConfigError("required files not found: player_keys.json")
+        keyfile=open(keypath,'r')
         observer_keys=json.load(keyfile)
         keyfile.close()
         name=request.form.get('name')
@@ -180,7 +182,9 @@ def api_new_instance():
                 if not isinstance(key,int): raise ConfigError("observer_keys.json: non-integer found")
                 conn.execute(text('INSERT INTO observer_keys (username,instance,observer_key) VALUES (:username,:instance,:observer_key)'),{'username':current_user.id,'instance':name,'observer_key':key})
             conn.execute(text('UPDATE observer_keys SET used=TRUE WHERE instance=:instance AND observer_key=:observer_key'),{'instance':name,'observer_key':observer_keys[0]})
-            keyfile=open(os.path.join(config_dir,'player_keys.json'),'r')
+            keypath=os.path.join(config_dir,'player_keys.json')
+            if not os.path.isfile(keypath): raise ConfigError("required files not found: player_keys.json")
+            keyfile=open(keypath,'r')
             player_keys=json.load(keyfile)
             keyfile.close()
             for key in player_keys:
