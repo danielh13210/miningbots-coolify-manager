@@ -171,7 +171,7 @@ def api_new_instance():
         with zipfile.ZipFile(config_zip, 'r') as zip_device:
             safe_extract(zip_device, config_dir)
         keypath=os.path.join(config_dir,'observer_keys.json')
-        if not os.path.isfile(keypath): raise ConfigError("required files not found: player_keys.json")
+        if not os.path.isfile(keypath): raise ConfigError("required files not found: observer_keys.json")
         keyfile=open(keypath,'r')
         observer_keys=json.load(keyfile)
         keyfile.close()
