@@ -69,7 +69,7 @@
           <p>
             User ID: {{showcred_creds['userID']}}<br>
             Password: {{showcred_creds['password']}}<br>
-            <span style="color:red;">Warning: copy them before they're gone. You can only see them once.</span>
+            <strong><span>Warning: copy them before they're gone. You can only see them once.</span></strong>
           </p>
         {% endif %}
         <button class="btn btn-danger" onclick="delete_player_clicked('{{player}}','{{instance}}')" id="delete-player-{{player}}">Delete</button>
