@@ -38,6 +38,19 @@
     </div>
   </nav>
   <h1>Details of instance {{instance}}</h1>
+  <span
+    {% if not instances[instance]["running"] %}
+      title="Instance is not running, start it to open the frontend."
+    {% endif %}
+  >
+    <button class="btn btn-primary"
+      {% if not instances[instance]["running"] %}
+        disabled
+      {% endif %}
+      onclick="window.open('{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}', '_blank')">
+        Open Frontend
+    </button>
+  </span>
   {% if instances[instance]['running'] %}
     <button class="btn btn-secondary" onclick="stop_instance_clicked('{{instance}}');" id="stop-instance-{{instance}}">Stop</button>
   {% else %}
