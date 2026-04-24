@@ -43,3 +43,8 @@ h1.title {
 .icon {
   height: 20px;
 }
+
+span.btn-disabled-wrapper, button.btn[disabled] {
+  cursor: not-allowed !important;
+  opacity: 1;
+}

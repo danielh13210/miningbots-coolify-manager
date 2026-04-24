@@ -51,6 +51,7 @@
         <span
           {% if not instances[instance]["running"] %}
             title="Instance is not running, start it to open the frontend."
+            class="btn-disabled-wrapper"
           {% endif %}
         >
           <button class="btn btn-primary"
