@@ -43,22 +43,6 @@
   {% else %}
     <button class="btn btn-primary" onclick="start_instance_clicked('{{instance}}');" id="start-instance-{{instance}}">Start</button>
   {% endif %}
-  <span
-    {% if instances[instance]["running"] %}
-      title="Instance must be stopped before it can be deleted."
-    {% endif %}
-  >
-    <button
-      class="btn btn-danger"
-      onclick="delete_instance_clicked('{{instance}}')"
-      id="delete-instance-{{instance}}"
-      {% if instances[instance]["running"] %}
-        disabled
-      {% endif %}
-    >
-      Delete
-    </button>
-  </span>
   <h1>Players</h1>
   {% if players %}
     {% for player in players %}
@@ -83,6 +67,23 @@
   {% else %}
     Player creation is unavailable due to an error: {{corrupt_error}}
   {% endif %}
+  <br>
+  <span
+    {% if instances[instance]["running"] %}
+      title="Instance must be stopped before it can be deleted."
+    {% endif %}
+  >
+    <button
+      class="btn btn-danger"
+      onclick="delete_instance_clicked('{{instance}}')"
+      id="delete-instance-{{instance}}"
+      {% if instances[instance]["running"] %}
+        disabled
+      {% endif %}
+    >
+      Delete Instance
+    </button>
+  </span>
   {% if showcred_player %}
     <script>
       window.history.replaceState('','','/details?instance={{instance}}');
