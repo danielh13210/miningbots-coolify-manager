@@ -41,7 +41,9 @@
   <span
     {% if not instances[instance]["running"] %}
       title="Instance is not running, start it to open the frontend."
-      class="btn-disabled-wrapper"
+      class="btn-wrapper disabled"
+    {% else %}
+      class="btn-wrapper"
     {% endif %}
   >
     <button class="btn btn-primary"
@@ -52,11 +54,13 @@
         Open Frontend
     </button>
   </span>
-  {% if instances[instance]['running'] %}
-    <button class="btn btn-secondary" onclick="stop_instance_clicked('{{instance}}');" id="stop-instance-{{instance}}">Stop</button>
-  {% else %}
-    <button class="btn btn-primary" onclick="start_instance_clicked('{{instance}}');" id="start-instance-{{instance}}">Start</button>
-  {% endif %}
+  <span class="btn-wrapper">
+    {% if instances[instance]['running'] %}
+      <button class="btn btn-secondary" onclick="stop_instance_clicked('{{instance}}');" id="stop-instance-{{instance}}">Stop</button>
+    {% else %}
+      <button class="btn btn-primary" onclick="start_instance_clicked('{{instance}}');" id="start-instance-{{instance}}">Start</button>
+    {% endif %}
+  </span>
   <h1>Players</h1>
   {% if players %}
     {% for player in players %}
@@ -85,7 +89,9 @@
   <span
     {% if instances[instance]["running"] %}
       title="Instance must be stopped before it can be deleted."
-      class="btn-disabled-wrapper"
+      class="btn-wrapper disabled"
+    {% else %}
+      class="btn-wrapper"
     {% endif %}
   >
     <button

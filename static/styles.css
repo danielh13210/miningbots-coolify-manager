@@ -44,7 +44,11 @@ h1.title {
   height: 20px;
 }
 
-span.btn-disabled-wrapper, button.btn[disabled] {
+span.btn-wrapper.disabled, button.btn[disabled] {
   cursor: not-allowed !important;
   opacity: 1;
+}
+
+span.btn-wrapper {
+  display: inline-flex;
 }

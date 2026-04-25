@@ -51,7 +51,9 @@
         <span
           {% if not instances[instance]["running"] %}
             title="Instance is not running, start it to open the frontend."
-            class="btn-disabled-wrapper"
+            class="btn-wrapper disabled"
+          {% else %}
+            class="btn-wrapper"
           {% endif %}
         >
           <button class="btn btn-primary"
@@ -62,7 +64,9 @@
               Open Frontend
           </button>
         </span>
-        <button class="btn btn-secondary" onclick="window.open('/details?instance={{instance}}', '_self')">More...</button>
+        <span class="btn-wrapper">
+          <button class="btn btn-secondary" onclick="window.open('/details?instance={{instance}}', '_self')">More...</button>
+        </span>
       </div>
     {% endfor %}
   {% else %}
