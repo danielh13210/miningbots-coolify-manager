@@ -144,8 +144,8 @@ def details():
         players=[player_row[0] for player_row in player_rows]
     # Render index.html from the templates folder
     if not os.path.isdir(instances[instance]['config_dir']):
-        return render_template_with_user("details.html", instance=instance, instances=instances,players=players,nocorrupt=False,corrupt_error="cannot find config dir for instance, please recreate this instance")
-    return render_template_with_user("details.html", instance=instance, instances=instances,players=players,nocorrupt=True)
+        return render_template_with_user("details.html", instance=instance, instances=instances,players=players,nocorrupt=False,corrupt_error="cannot find config dir for instance, please recreate this instance",frontend_url=os.environ['fe_host'])
+    return render_template_with_user("details.html", instance=instance, instances=instances,players=players,nocorrupt=True,frontend_url=os.environ['fe_host'])
 
 @app.route("/new",methods=['GET'])
 @login_required
