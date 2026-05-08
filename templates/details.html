@@ -61,7 +61,23 @@
       <button class="btn btn-primary" onclick="start_instance_clicked('{{instance}}');" id="start-instance-{{instance}}">Start</button>
     {% endif %}
   </span>
-  <h1>Players</h1>
+  <div class="instances-row">
+    <h1>Players</h1>
+    <span
+      {% if nocorrupt %}
+        class="btn-wrapper"
+      {% else %}
+        class="btn-wrapper disabled"
+        title="This instance is corrupted. Please delete it and create a new one to create players."
+      {% endif %}
+    ></span>
+      <button class="btn" 
+              {% if not nocorrupt %}
+                disabled
+              {% endif %}
+              onclick="location.href='/players/new?instance={{instance}}';"><img src="/static/add.svg" alt="Add Player"></button>
+    </span>
+  </div>
   {% if players %}
     {% for player in players %}
       <div class="instance-box" id="instancebox-{{instance}}">
@@ -79,11 +95,6 @@
     {% endfor %}
   {% else %}
     <h2 id="no-instance">No players.</h2>
-  {% endif %}
-  {% if nocorrupt %}
-    <a href="/players/new?instance={{instance}}">New Player</a>
-  {% else %}
-    Player creation is unavailable due to an error: {{corrupt_error}}
   {% endif %}
   <br>
   <span
