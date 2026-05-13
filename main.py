@@ -196,8 +196,8 @@ def api_new_instance():
             for key in player_keys:
                 if not isinstance(key,int): raise ConfigError("player_keys.json: non-integer found")
                 conn.execute(text('INSERT INTO player_keys(username,instance,player_key) VALUES (:username,:instance,:player_key)'),{'username':current_user.id,'instance':name,'player_key':key})
+            spawn_new_instance(current_user.id,name,config_dir,observer_keys[0],start=request.form.get('autoStart'))
             conn.commit()
-        spawn_new_instance(current_user.id,name,config_dir,observer_keys[0],start=request.form.get('autoStart'))
     except ConflictException:
         return render_template_with_user("new_instance.html",error="Docker container conflict. Please choose another name")
     except ConfigError as e:
@@ -237,6 +237,7 @@ def api_new_player():
                 raise NoKeysException()
             conn.execute(text("INSERT INTO users (id, password) VALUES (:id,:password)"),{"id":credentials["userID"],"password":argon2.PasswordHasher().hash(credentials["password"])})
             conn.execute(text("INSERT INTO players (username,name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key) VALUES (:username,:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key)"),{"username":current_user.id,"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key})
+            spawn_player(current_user.id,name,instance,instances)
             conn.commit()
         with zipfile.ZipFile(os.path.join(uploaddir,"testpack.zip"),mode='w') as configpack:
             with configpack.open('server_config.json','w') as scfile:
@@ -256,7 +257,6 @@ def api_new_player():
     with engine.connect() as conn:
         player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
         players=[player_row[0] for player_row in player_rows]
-    spawn_player(current_user.id,name,instance,instances)
     return render_template_with_user("details.html",instance=instance,instances=instances,players=players,showcred_player=name,showcred_creds=credentials,nocorrupt=True)
 
 
