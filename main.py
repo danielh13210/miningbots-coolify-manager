@@ -217,7 +217,6 @@ def api_new_player():
         if instance not in instances:
             return render_template_with_user("new_player.html",instance=instance,error="Instance not found")
         uploaddir=f"/tmp/{containerName}"
-        os.makedirs(uploaddir)
         import secrets,base64
         credentials={"userID":userID,"password":base64.b64encode(secrets.token_bytes(8)).decode()}
         with engine.connect() as conn:
@@ -239,6 +238,7 @@ def api_new_player():
             conn.execute(text("INSERT INTO players (username,name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key) VALUES (:username,:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key)"),{"username":current_user.id,"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key})
             spawn_player(current_user.id,name,instance,instances)
             conn.commit()
+        os.makedirs (uploaddir,exist_ok=True)
         with zipfile.ZipFile(os.path.join(uploaddir,"testpack.zip"),mode='w') as configpack:
             with configpack.open('server_config.json','w') as scfile:
                 scfile.write(format_config_template('server_config.json',hostname=f'{name}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
@@ -248,8 +248,7 @@ def api_new_player():
             with configpack.open('server_config.json','w') as scfile:
                 scfile.write(format_config_template('server_config.json',hostname=f'{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
             with configpack.open('player_config.json','w') as pcfile:
-                pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
-        os.makedirs (uploaddir,exist_ok=True)
+              pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
     except ConflictException:
         return render_template_with_user("new_player.html",instance=instance,error="Player name conflict. Please choose another name")
     except NoKeysException:
