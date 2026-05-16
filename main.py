@@ -241,12 +241,12 @@ def api_new_player():
         os.makedirs (uploaddir,exist_ok=True)
         with zipfile.ZipFile(os.path.join(uploaddir,"testpack.zip"),mode='w') as configpack:
             with configpack.open('server_config.json','w') as scfile:
-                scfile.write(format_config_template('server_config.json',hostname=f'{name}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
+                scfile.write(format_config_template('server_config.json',hostname=f'{userID}-mb.{os.environ["BASE_DOMAIN"]}').encode())
             with configpack.open('player_config.json','w') as pcfile:
                 pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
         with zipfile.ZipFile(os.path.join(uploaddir,"comppack.zip"),mode='w') as configpack:
             with configpack.open('server_config.json','w') as scfile:
-                scfile.write(format_config_template('server_config.json',hostname=f'{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
+                scfile.write(format_config_template('server_config.json',hostname=f'{current_user.id}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
             with configpack.open('player_config.json','w') as pcfile:
               pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
     except ConflictException:
