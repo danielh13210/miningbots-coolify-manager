@@ -162,6 +162,8 @@ def new_player():
 @app.route("/new",methods=['POST'])
 @login_required
 def api_new_instance():
+    def error_cleanup():
+        shutil.rmtree(config_dir)
     try:
         config_zip=request.files.get('config-zip')
         config_dir=tempfile.mkdtemp()
@@ -199,9 +201,14 @@ def api_new_instance():
             spawn_new_instance(current_user.id,name,config_dir,observer_keys[0],start=request.form.get('autoStart'))
             conn.commit()
     except ConflictException:
+        error_cleanup()
         return render_template_with_user("new_instance.html",error="Docker container conflict. Please choose another name")
     except ConfigError as e:
+        error_cleanup()
         return render_template_with_user("new_instance.html",error=f"Configuration error: {e.args[0]}")
+    except:
+        error_cleanup()
+        raise
     return redirect("/")
 
 @app.route("/players/new",methods=['POST'])
