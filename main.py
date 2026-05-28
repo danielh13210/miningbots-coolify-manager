@@ -129,6 +129,11 @@ def home():
     # Render index.html from the templates folder
     return render_template_with_user("index.html", instances=get_active_instances(current_user.id), frontend_url=os.environ['fe_host'])
 
+@app.route("/change_password")
+@login_required
+def change_password():
+    return render_template_with_user("change_password.html")
+
 @app.route("/details")
 @login_required
 def details():
@@ -373,6 +378,21 @@ def login_post():
         return redirect(request.args.get('next') or '/')
     else:
         return render_template("login.html",error="Login incorrect")
+
+@app.route("/change_password", methods=['POST'])
+@login_required
+def change_password_post():
+    old_password=request.form.get('current')
+    new_password=request.form.get('new')
+    confirm_password=request.form.get('confirm')
+    if not check_user(current_user.id,old_password):
+        return render_template_with_user("change_password.html",error="Current password incorrect")
+    if new_password!=confirm_password:
+        return render_template_with_user("change_password.html",error="New password and confirmation do not match")
+    with engine.connect() as conn:
+        conn.execute(text("UPDATE im_users SET password=:password WHERE id=:id"),{"password":argon2.PasswordHasher().hash(new_password),"id":current_user.id})
+        conn.commit()
+    return render_template_with_user("cp_success.html")
 
 @app.route("/logout")
 @login_required
