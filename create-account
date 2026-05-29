@@ -1,0 +1,20 @@
+#!/usr/local/bin/python3
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import declarative_base
+import os, sys, getpass, argon2
+engine=create_engine(os.environ['POSTGRES_CONNECT_URI'])
+
+Base = declarative_base()
+class IMUserEntry(Base):
+    from sqlalchemy import Column, String
+    __tablename__ = "im_users"
+
+    id = Column(String, primary_key=True)
+    password = Column(String, nullable=False) # not the password, the hex hash
+Base.metadata.create_all(engine)
+
+with engine.connect() as conn:
+    conn.begin()
+    conn.execute(text("INSERT INTO im_users (id,password) VALUES (:id,:password) ON CONFLICT (id) DO NOTHING"),{"id":sys.argv[1],"password":argon2.PasswordHasher().hash(getpass.getpass("Password: "))})
+    conn.commit()

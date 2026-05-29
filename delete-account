@@ -1,0 +1,37 @@
+#!/usr/local/bin/python3
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import declarative_base
+import os, sys
+from instances import *
+engine=create_engine(os.environ['POSTGRES_CONNECT_URI'])
+
+Base = declarative_base()
+class IMUserEntry(Base):
+    from sqlalchemy import Column, String
+    __tablename__ = "im_users"
+
+    id = Column(String, primary_key=True)
+    password = Column(String, nullable=False) # not the password, the hex hash
+Base.metadata.create_all(engine)
+
+with engine.connect() as conn:
+    conn.begin()
+    conn.execute(text("DELETE FROM shared_instances WHERE share_source=:id OR share_destination=:id"),{"id":sys.argv[1]})
+    results=conn.execute(text("SELECT uploaddir, username, name, instance, \"ownerID\" FROM players WHERE username=:username"),{"username":sys.argv[1]})
+    for player in results.fetchall():
+        import shutil
+        delete_player(player[1],player[2],player[3])
+        shutil.rmtree(player[0])
+        conn.execute(text("DELETE FROM users WHERE id=:id"),{"id":player[4]})
+    conn.execute(text("DELETE FROM player_keys WHERE username=:username"),{"username":sys.argv[1]})
+    conn.execute(text("DELETE FROM observer_keys WHERE username=:username"),{"username":sys.argv[1]})
+    instances=get_active_instances(sys.argv[1],engine)
+    for instance in instances:
+        if '/' in instance: continue
+        import shutil
+        shutil.rmtree(instances[instance]['config_dir'])
+        stop_instance(sys.argv[1],instance)
+        delete_instance(sys.argv[1],instance)
+    conn.execute(text("DELETE FROM im_users WHERE id=:id"),{"id":sys.argv[1]})
+    conn.commit()
