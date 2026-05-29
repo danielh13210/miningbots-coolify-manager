@@ -26,6 +26,13 @@ function delete_player(player,instance,completion_handler){
     })
 }
 
+function delete_share(destination,instance,completion_handler){
+    fetch(`${location.origin}/sharing/delete?instance=${instance}&destination=${destination}`,{method:'DELETE'}).then((resp)=>{
+        const success=resp.ok;
+        completion_handler(success);
+    })
+}
+
 function stop_instance_clicked(instance){
     if(!confirm(`Are you sure you want to stop instance "${instance}"?`))return;
     let button=document.getElementById(`stop-instance-${instance}`);
@@ -93,6 +100,24 @@ function delete_player_clicked(player,instance){
             setTimeout(()=>{
                 button.disabled=false;
                 button.innerText="Delete";
+            },2000);
+        }
+    });
+}
+
+function delete_share_clicked(destination,instance){
+    if(!confirm(`Are you sure you want to remove access for "${destination}"?`))return;
+    let button=document.getElementById(`delete-share-${destination}`);
+    button.disabled=true;
+    button.innerText="Deleting...";
+    delete_share(destination,instance,(success)=>{
+        if (success) {
+            location.reload();
+        } else {
+            button.innerText="Failed";
+            setTimeout(()=>{
+                button.disabled=false;
+                button.innerText="Remove";
             },2000);
         }
     });

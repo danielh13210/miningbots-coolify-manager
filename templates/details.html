@@ -64,6 +64,23 @@
       <button class="btn btn-primary" onclick="start_instance_clicked('{{instance}}');" id="start-instance-{{instance}}">Start</button>
     {% endif %}
   </span>
+  <span
+    {% if '/' in instance %}
+      title="Only the owner of an instance can share an instance."
+      class="btn-wrapper disabled"
+    {% else %}
+      class="btn-wrapper"
+    {% endif %}
+  >
+    <button class="btn btn-info" 
+      {% if '/' in instance %}
+        disabled
+      {% endif %}
+      onclick="location.href='/sharing?instance={{instance}}';" id="share-instance-{{instance}}"
+    >
+      Sharing Settings...
+    </button>
+  </span>
   <div class="instances-row">
     <h1>Players</h1>
     <span
@@ -104,6 +121,9 @@
     {% if instances[instance]["running"] %}
       title="Instance must be stopped before it can be deleted."
       class="btn-wrapper disabled"
+    {% elif '/' in instance %}
+      title="Only the owner of an instance can delete an instance."
+      class="btn-wrapper disabled"
     {% else %}
       class="btn-wrapper"
     {% endif %}
@@ -112,7 +132,7 @@
       class="btn btn-danger"
       onclick="delete_instance_clicked('{{instance}}')"
       id="delete-instance-{{instance}}"
-      {% if instances[instance]["running"] %}
+      {% if instances[instance]["running"] or '/' in instance %}
         disabled
       {% endif %}
     >

@@ -2,6 +2,8 @@ import httpx
 import os
 import re
 import stat
+import json
+from sqlalchemy import text
 
 traefik_rule_matcher=re.compile(r'traefik\..*\.rule')
 get_host=re.compile(r'Host\("(.*)"\)')
@@ -123,19 +125,49 @@ def get_traefik_host(container):
 def get_observer_key(container):
     return container['Labels']['observer_key']
 
-def get_active_instances(username):
+def parse_container_name(username,container_name):
+    if '/' in container_name:
+        return container_name.split('/',maxsplit=1)
+    else:
+        return username, container_name
+    
+def get_active_instances(username,db_conn):
+    with db_conn.connect() as conn:
+        result=conn.execute(text("SELECT share_source, instance FROM shared_instances WHERE share_destination=:me"),{"me":username})
+        matches=result.fetchall()
+        additional_container_names=list(map(lambda row:row[0]+'-'+row[1],matches))
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         # Filter for containers that have the label "miningbots-app-instance"
         r = client.get(
             "http://localhost/containers/json",
-            params={"filters": f'{{"label":["miningbots-app-instance"],"name":["^{username}-.*"]}}',"all":'true'}
+            params={"filters": json.dumps({"label":["miningbots-app-instance"],"name":[f"^{username}-.*"]+additional_container_names}),"all":'true'}
         )
         containers = r.json()
-    return dict(map(lambda container:(os.path.basename(container['Names'][0])[len(username)+1:],{'url':f'https://{get_traefik_host(container)}','observer_key':get_observer_key(container),'running':container['State']=='running','config_dir':container['Labels'].get('configdir')}),containers))
+    def container_entry(container, username):
+        # derive the name
+        raw_name = os.path.basename(container['Names'][0])
+        if raw_name.startswith(username):
+            name = raw_name.split('-', maxsplit=1)[1]
+        else:
+            name = '/'.join(raw_name.split('-', maxsplit=1))
+
+        # build the value dict
+        return name, {
+            'url': f'https://{get_traefik_host(container)}',
+            'observer_key': get_observer_key(container),
+            'running': container['State'] == 'running',
+            'config_dir': container['Labels'].get('configdir'),
+        }
+
+    # now build the dict
+    return dict(
+        container_entry(container, username) for container in containers
+    )
 
 def stop_instance(username,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        response = client.post(f"http://localhost/containers/{username}-{instance}/stop",timeout=httpx.Timeout(30.0))
+        user, name = parse_container_name(username, instance)
+        response = client.post(f"http://localhost/containers/{user}-{name}/stop",timeout=httpx.Timeout(30.0))
 
         try:
             content=response.json()
@@ -144,7 +176,8 @@ def stop_instance(username,instance):
         return {'success':response.status_code==204,'rawError':content} # return true if success
 def delete_instance(username,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        response = client.delete(f"http://localhost/containers/{username}-{instance}",timeout=httpx.Timeout(30.0))
+        user, name = parse_container_name(username, instance)
+        response = client.delete(f"http://localhost/containers/{user}-{name}",timeout=httpx.Timeout(30.0))
 
         try:
             content=response.json()
@@ -153,7 +186,8 @@ def delete_instance(username,instance):
         return {'success':response.status_code==204,'rawError':content} # return true if success
 def start_instance(username,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        response = client.post(f"http://localhost/containers/{username}-{instance}/start",timeout=httpx.Timeout(30.0))
+        user, name = parse_container_name(username, instance)
+        response = client.post(f"http://localhost/containers/{user}-{name}/start",timeout=httpx.Timeout(30.0))
 
         try:
             content=response.json()
@@ -163,8 +197,10 @@ def start_instance(username,instance):
 
 def delete_player(username,player,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+        candidate = f"{instance}-{player}"
+        user, rest = parse_container_name(username, candidate)
         response = client.delete(
-            f"http://localhost/containers/{username}-{instance}-{player}",
+            f"http://localhost/containers/{user}-{rest}",
             params={'force':'true'},
             timeout=httpx.Timeout(30.0)
         )

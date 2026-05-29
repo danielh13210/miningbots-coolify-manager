@@ -79,6 +79,17 @@ class ObserverKeys(Base):
         PrimaryKeyConstraint("username","instance","observer_key"),
     )
 
+class InstanceShares(Base):
+    from sqlalchemy import Column, String, ForeignKey, PrimaryKeyConstraint
+    __tablename__ = "shared_instances"
+
+    share_destination=Column(String, ForeignKey("im_users.id"), nullable=False)
+    share_source=Column(String, ForeignKey("im_users.id"), nullable=False)
+    instance=Column(String, nullable=False)
+    __table_args__ = (
+        PrimaryKeyConstraint("share_destination","share_source","instance"),
+    )
+
 def check_user(id,password):
     with engine.connect() as conn:
         result = conn.execute(
@@ -127,7 +138,7 @@ def render_template_with_user(template_name, **kwargs):
 @login_required
 def home():
     # Render index.html from the templates folder
-    return render_template_with_user("index.html", instances=get_active_instances(current_user.id), frontend_url=os.environ['fe_host'])
+    return render_template_with_user("index.html", instances=get_active_instances(current_user.id,engine), frontend_url=os.environ['fe_host'])
 
 @app.route("/change_password")
 @login_required
@@ -141,16 +152,18 @@ def details():
         instance=request.args['instance']
     except KeyError:
         return "Instance required",400
-    instances=get_active_instances(current_user.id)
+    instances=get_active_instances(current_user.id,engine)
     if instance not in instances:
         return "Instance not found",404
+    instance_raw=instance
+    username, instance=parse_container_name(current_user.id,instance)
     with engine.connect() as conn:
-        player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
+        player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username}).fetchall()
         players=[player_row[0] for player_row in player_rows]
     # Render index.html from the templates folder
     if not os.path.isdir(instances[instance]['config_dir']):
-        return render_template_with_user("details.html", instance=instance, instances=instances,players=players,nocorrupt=False,corrupt_error="cannot find config dir for instance, please recreate this instance",frontend_url=os.environ['fe_host'])
-    return render_template_with_user("details.html", instance=instance, instances=instances,players=players,nocorrupt=True,frontend_url=os.environ['fe_host'])
+        return render_template_with_user("details.html", instance=instance_raw, instances=instances,players=players,nocorrupt=False,corrupt_error="cannot find config dir for instance, please recreate this instance",frontend_url=os.environ['fe_host'])
+    return render_template_with_user("details.html", instance=instance_raw, instances=instances,players=players,nocorrupt=True,frontend_url=os.environ['fe_host'])
 
 @app.route("/new",methods=['GET'])
 @login_required
@@ -219,36 +232,38 @@ def api_new_instance():
 @app.route("/players/new",methods=['POST'])
 @login_required
 def api_new_player():
-    instances=get_active_instances(current_user.id)
+    instances=get_active_instances(current_user.id,engine)
     try:
         name=request.form.get('name')
         instance=request.form.get('instance')
-        userID=containerName=f"{current_user.id}-{instance}-{name}"
+        instance_raw=instance
+        username, instance=parse_container_name(current_user.id,instance)
+        userID=containerName=f"{username}-{instance}-{name}"
         if not (name and instance):
-            return render_template_with_user("new_player.html",instance=instance,error="Player name and instance name required")
+            return render_template_with_user("new_player.html",instance=instance_raw,error="Player name and instance name required")
         if instance not in instances:
-            return render_template_with_user("new_player.html",instance=instance,error="Instance not found")
+            return render_template_with_user("new_player.html",instance=instance_raw,error="Instance not found")
         uploaddir=f"/tmp/{containerName}"
         import secrets,base64
         credentials={"userID":userID,"password":base64.b64encode(secrets.token_bytes(8)).decode()}
         with engine.connect() as conn:
             conn.begin()
-            if conn.execute(text("SELECT * FROM players WHERE name=:name AND instance=:instance"),{"name":name,"instance":instance}).fetchone(): raise ConflictException
-            player_key=conn.execute(text("SELECT player_key FROM player_keys WHERE instance=:instance AND username=:username AND used=FALSE"),{"instance":instance,"username":current_user.id}).fetchone()
+            if conn.execute(text("SELECT * FROM players WHERE name=:name AND instance=:instance AND username=:username"),{"name":name,"instance":instance,"username":username}).fetchone(): raise ConflictException
+            player_key=conn.execute(text("SELECT player_key FROM player_keys WHERE instance=:instance AND username=:username AND used=FALSE"),{"instance":instance,"username":username}).fetchone()
             if player_key:
                 player_key=player_key[0]
-                conn.execute(text("UPDATE player_keys SET used=true WHERE instance=:instance AND username=:username AND player_key=:player_key"),{"instance":instance,"username":current_user.id,"player_key":player_key})
+                conn.execute(text("UPDATE player_keys SET used=true WHERE instance=:instance AND username=:username AND player_key=:player_key"),{"instance":instance,"username":username,"player_key":player_key})
             else:
                 raise NoKeysException()
-            observer_key=conn.execute(text("SELECT observer_key FROM observer_keys WHERE instance=:instance AND username=:username AND used=FALSE"),{"instance":instance,"username":current_user.id}).fetchone()
+            observer_key=conn.execute(text("SELECT observer_key FROM observer_keys WHERE instance=:instance AND username=:username AND used=FALSE"),{"instance":instance,"username":username}).fetchone()
             if observer_key:
                 observer_key=observer_key[0]
-                conn.execute(text("UPDATE observer_keys SET used=true WHERE instance=:instance AND username=:username AND observer_key=:observer_key"),{"instance":instance,"username":current_user.id,"observer_key":observer_key})
+                conn.execute(text("UPDATE observer_keys SET used=true WHERE instance=:instance AND username=:username AND observer_key=:observer_key"),{"instance":instance,"username":username,"observer_key":observer_key})
             else:
                 raise NoKeysException()
             conn.execute(text("INSERT INTO users (id, password) VALUES (:id,:password)"),{"id":credentials["userID"],"password":argon2.PasswordHasher().hash(credentials["password"])})
-            conn.execute(text("INSERT INTO players (username,name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key) VALUES (:username,:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key)"),{"username":current_user.id,"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key})
-            spawn_player(current_user.id,name,instance,instances)
+            conn.execute(text("INSERT INTO players (username,name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key) VALUES (:username,:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key)"),{"username":username,"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key})
+            spawn_player(username,name,instance,instances)
             conn.commit()
         os.makedirs (uploaddir,exist_ok=True)
         with zipfile.ZipFile(os.path.join(uploaddir,"testpack.zip"),mode='w') as configpack:
@@ -258,17 +273,17 @@ def api_new_player():
                 pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
         with zipfile.ZipFile(os.path.join(uploaddir,"comppack.zip"),mode='w') as configpack:
             with configpack.open('server_config.json','w') as scfile:
-                scfile.write(format_config_template('server_config.json',hostname=f'{current_user.id}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
+                scfile.write(format_config_template('server_config.json',hostname=f'{username}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
             with configpack.open('player_config.json','w') as pcfile:
               pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
     except ConflictException:
-        return render_template_with_user("new_player.html",instance=instance,error="Player name conflict. Please choose another name")
+        return render_template_with_user("new_player.html",instance=instance_raw,error="Player name conflict. Please choose another name")
     except NoKeysException:
-        return render_template_with_user("new_player.html",instance=instance,error="No keys left, the instance cannot fit any more players")
+        return render_template_with_user("new_player.html",instance=instance_raw,error="No keys left, the instance cannot fit any more players")
     with engine.connect() as conn:
-        player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance"),{"instance":instance}).fetchall()
+        player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username}).fetchall()
         players=[player_row[0] for player_row in player_rows]
-    return render_template_with_user("details.html",instance=instance,instances=instances,players=players,showcred_player=name,showcred_creds=credentials,nocorrupt=True)
+    return render_template_with_user("details.html",instance=instance_raw,instances=instances,players=players,showcred_player=name,showcred_creds=credentials,nocorrupt=True)
 
 
 @app.route("/favicon.ico")
@@ -282,7 +297,7 @@ def api_stop_instance():
         instance=request.args['instance']
     except KeyError:
         return jsonify({"error":"instance name required"}),500
-    if instance not in get_active_instances(current_user.id):
+    if instance not in get_active_instances(current_user.id,engine):
         return jsonify({"error":"instance not found"}),404
     if (error:=stop_instance(current_user.id,instance))['success']:
         return "",204
@@ -295,8 +310,10 @@ def api_delete_instance():
         instance=request.args['instance']
     except KeyError:
         return jsonify({"error":"instance name required"}),500
-    if instance not in (instances:=get_active_instances(current_user.id)):
+    if instance not in (instances:=get_active_instances(current_user.id,engine)):
         return jsonify({"error":"instance not found"}),404
+    if '/' in instance: 
+        return jsonify({"error":"only the owner can delete an instance"}),403
     container=instances[instance]
     if (error:=delete_instance(current_user.id,instance))['success']:
         import shutil
@@ -335,17 +352,19 @@ def api_delete_player():
             player=request.args['player']
         except KeyError:
             return jsonify({"error":"instance and player name required"}),500
-        row=conn.execute(text("SELECT uploaddir,\"ownerID\",player_key,observer_key FROM players WHERE name=:name AND instance=:instance"),{"instance":instance,"name":player}).fetchone() # fetch one, it's unique
+        instance_raw=instance
+        username,instance=parse_container_name(current_user.id,instance)
+        row=conn.execute(text("SELECT uploaddir,\"ownerID\",player_key,observer_key FROM players WHERE name=:name AND instance=:instance AND username=:username"),{"instance":instance,"name":player,"username":username}).fetchone() # fetch one, it's unique
         if not row:
             return jsonify({"error":"player not found on instance"}),404
-        if not (error:=delete_player(current_user.id,player,instance))['success']:
+        if not (error:=delete_player(username,player,instance))['success']:
             return jsonify({"error":"failed to delete test server","rawError":error['rawError']}),500
         import shutil
         shutil.rmtree(row[0])
-        conn.execute(text("DELETE FROM players WHERE name=:name AND username=:username AND instance=:instance"),{"instance":instance,"name":player,"username":current_user.id})
+        conn.execute(text("DELETE FROM players WHERE name=:name AND username=:username AND instance=:instance"),{"instance":instance,"name":player,"username":username})
         conn.execute(text("DELETE FROM users WHERE id=:id"),{"id":row[1]})
-        conn.execute(text("UPDATE player_keys SET used=FALSE WHERE instance=:instance AND username=:username AND player_key=:player_key"),{"instance":instance,"username":current_user.id,"player_key":row[2]})
-        conn.execute(text("UPDATE observer_keys SET used=FALSE WHERE instance=:instance AND username=:username AND observer_key=:observer_key"),{"instance":instance,"username":current_user.id,"observer_key":row[3]})
+        conn.execute(text("UPDATE player_keys SET used=FALSE WHERE instance=:instance AND username=:username AND player_key=:player_key"),{"instance":instance,"username":username,"player_key":row[2]})
+        conn.execute(text("UPDATE observer_keys SET used=FALSE WHERE instance=:instance AND username=:username AND observer_key=:observer_key"),{"instance":instance,"username":username,"observer_key":row[3]})
         conn.commit()
         return "",204
 @app.route("/start",methods=['POST'])
@@ -355,12 +374,69 @@ def api_start_instance():
         instance=request.args['instance']
     except KeyError:
         return jsonify({"error":"instance name required"}),500
-    if instance not in get_active_instances(current_user.id):
+    if instance not in get_active_instances(current_user.id,engine):
         return jsonify({"error":"instance not found"}),404
     if (error:=start_instance(current_user.id,instance))['success']:
         return "",204
     else:
         return jsonify({"error":"failed to start","rawError":error['rawError']}),500
+
+@app.route('/sharing',methods=['GET'])
+@login_required
+def sharing_settings():
+    instance=request.args.get('instance')
+    with engine.connect() as conn:
+        share_destinations=[row[0] for row in conn.execute(text("SELECT share_destination FROM shared_instances WHERE share_source=:source AND instance=:instance"),{"source":current_user.id,"instance":instance}).fetchall()]
+    return render_template_with_user("sharing_settings.html",instances=get_active_instances(current_user.id,engine), instance=instance, share_destinations=share_destinations)
+
+@app.route('/sharing/share',methods=['GET'])
+@login_required
+def share():
+    instance=request.args.get('instance')
+    return render_template_with_user("share.html",instances=get_active_instances(current_user.id,engine), instance=instance)
+
+@app.route('/sharing/delete',methods=['DELETE'])
+@login_required
+def api_delete():
+    instance=request.args.get('instance')
+    destination=request.args.get('destination')
+    username,instance=parse_container_name(current_user.id,instance)
+    if username!=current_user.id:
+        return jsonify({"error":"can only delete shares for instances you own"}),403
+    with engine.connect() as conn:
+        conn.begin()
+        if not conn.execute(text("SELECT id FROM im_users WHERE id=:id"),{"id":destination}).fetchone():
+            return jsonify({"error":f"destination user {destination} does not exist"}),404
+        if not conn.execute(text("SELECT * FROM shared_instances WHERE share_source=:source AND share_destination=:destination AND instance=:instance"),{"source":current_user.id,"destination":destination,"instance":instance}).fetchone():
+            return jsonify({"error":f"share to {destination} does not exist"}),404
+        conn.execute(text("DELETE FROM shared_instances WHERE share_source=:source AND share_destination=:destination AND instance=:instance"),{"source":current_user.id,"destination":destination,"instance":instance})
+        conn.commit()
+    return "",204
+
+@app.route('/sharing/share',methods=['POST'])
+@login_required
+def api_share():
+    instance=request.form.get('instance')
+    raw_instance=instance
+    username,instance=parse_container_name(current_user.id,instance)
+    if username!=current_user.id:
+        return jsonify({"error":"can only share instances you own"}),403
+    destinations=request.form.get('destinations')
+    if not destinations:
+        return jsonify({"error":"destinations are required"}),400
+    destinations=destinations.splitlines()
+    with engine.connect() as conn:
+        conn.begin()
+        for destination in destinations:
+            destination=destination.strip()
+            if not destination: continue
+            if not conn.execute(text("SELECT id FROM im_users WHERE id=:id"),{"id":destination}).fetchone():
+                return jsonify({"error":f"destination user {destination} does not exist"}),404
+            if conn.execute(text("SELECT * FROM shared_instances WHERE share_source=:source AND share_destination=:destination AND instance=:instance"),{"source":current_user.id,"destination":destination,"instance":instance}).fetchone():
+                return jsonify({"error":f"instance already shared with {destination}"}),409
+            conn.execute(text("INSERT INTO shared_instances (share_source,share_destination,instance) VALUES (:source,:destination,:instance)"),{"source":current_user.id,"destination":destination,"instance":instance})
+        conn.commit()
+    return redirect(f"/sharing?instance={raw_instance}")
 
 @app.route("/login",methods=['GET'])
 @login_view('/login')
