@@ -89,7 +89,7 @@ def spawn_player(username, player, instance, instances):
                 f"traefik.http.routers.{username}-{instance}-{player}-mb.tls": "true",
                 f"traefik.http.routers.{username}-{instance}-{player}-mb.tls.certresolver": "letsencrypt",
                 f"traefik.http.services.{username}-{instance}-{player}.loadbalancer.server.port": "9003",
-                "observer_key": instances[instance]['observer_key']
+                "observer_key": str(instances[instance]['observer_key']) # labels must be strings
             },
             "HostConfig": {
                 "NetworkMode": "mb-instances",
@@ -136,6 +136,9 @@ def get_active_instances(username,db_conn):
         result=conn.execute(text("SELECT share_source, instance FROM shared_instances WHERE share_destination=:me"),{"me":username})
         matches=result.fetchall()
         additional_container_names=list(map(lambda row:row[0]+'-'+row[1],matches))
+        result=conn.execute(text("SELECT instance, observer_key, url,config_dir FROM virtual_instances WHERE username=:me"),{"me":username})
+        matches=result.fetchall()
+        virtual_instance_names=matches
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         # Filter for containers that have the label "miningbots-app-instance"
         r = client.get(
@@ -155,13 +158,23 @@ def get_active_instances(username,db_conn):
         return name, {
             'url': f'https://{get_traefik_host(container)}',
             'observer_key': get_observer_key(container),
+            'type': 'docker',
             'running': container['State'] == 'running',
             'config_dir': container['Labels'].get('configdir'),
+        }
+    def virtual_entry(instance, username):
+        return instance[0], {
+            'url': instance[2],
+            'observer_key': instance[1],
+            'type': 'virtual',
+            'running': None, # we can't actually know as we don't manage it
+            'config_dir': instance[3]
         }
 
     # now build the dict
     return dict(
-        container_entry(container, username) for container in containers
+        [container_entry(container, username) for container in containers] +
+        [virtual_entry(instance, username) for instance in virtual_instance_names]
     )
 
 def stop_instance(username,instance):

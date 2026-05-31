@@ -89,6 +89,23 @@ class InstanceShares(Base):
     __table_args__ = (
         PrimaryKeyConstraint("share_destination","share_source","instance"),
     )
+        
+class VirtualInstanceEntry(Base):
+    from sqlalchemy import Column, String, BigInteger, text, PrimaryKeyConstraint, ForeignKey, ForeignKeyConstraint
+    __tablename__ = "virtual_instances"
+
+    username=Column(String, ForeignKey("im_users.id"), nullable=False)
+    instance=Column(String, nullable=False)
+    observer_key=Column(BigInteger, nullable=False)
+    url=Column(String, nullable=False)
+    config_dir=Column(String, nullable=False)
+    # not needed, but makes foreign key constraints work because of the composite key
+    ok_instance=Column(String, nullable=False)
+    ok_username=Column(String, nullable=False)
+    __table_args__ = (
+        PrimaryKeyConstraint("username","instance"),
+        ForeignKeyConstraint(['observer_key','ok_instance','ok_username'],["observer_keys.observer_key","observer_keys.instance","observer_keys.username" ]),
+    )
 
 def check_user(id,password):
     with engine.connect() as conn:
@@ -169,6 +186,8 @@ def details():
 @login_required
 def new_instance():
     # Render new_instance.html from templates
+    if request.args.get('type')=="virtual":
+        return render_template_with_user("new_virtual_instance.html")
     return render_template_with_user("new_instance.html")
 
 @app.route("/players/new",methods=['GET'])
@@ -199,31 +218,60 @@ def api_new_instance():
             raise ConfigError('observer_keys.json: invalid JSON')
         keyfile.close()
         name=request.form.get('name')
-        with engine.connect() as conn:
-            conn.begin()
-            for key in observer_keys:
-                if not isinstance(key,int): raise ConfigError("observer_keys.json: non-integer found")
-                conn.execute(text('INSERT INTO observer_keys (username,instance,observer_key) VALUES (:username,:instance,:observer_key)'),{'username':current_user.id,'instance':name,'observer_key':key})
-            conn.execute(text('UPDATE observer_keys SET used=TRUE WHERE instance=:instance AND observer_key=:observer_key'),{'instance':name,'observer_key':observer_keys[0]})
-            keypath=os.path.join(config_dir,'player_keys.json')
-            if not os.path.isfile(keypath): raise ConfigError("required files not found: player_keys.json")
-            keyfile=open(keypath,'r')
-            try:
-                player_keys=json.load(keyfile)
-            except:
-                raise ConfigError('player_keys.json: invalid JSON')
-            keyfile.close()
-            for key in player_keys:
-                if not isinstance(key,int): raise ConfigError("player_keys.json: non-integer found")
-                conn.execute(text('INSERT INTO player_keys(username,instance,player_key) VALUES (:username,:instance,:player_key)'),{'username':current_user.id,'instance':name,'player_key':key})
-            spawn_new_instance(current_user.id,name,config_dir,observer_keys[0],start=request.form.get('autoStart'))
-            conn.commit()
+        type=request.form.get('type')
+        error_template="new_instance.html" if type=="docker" else "new_virtual_instance.html" # to render errors
+        if type=="docker":
+            with engine.connect() as conn:
+                conn.begin()
+                for key in observer_keys:
+                    if not isinstance(key,int): raise ConfigError("observer_keys.json: non-integer found")
+                    conn.execute(text('INSERT INTO observer_keys (username,instance,observer_key) VALUES (:username,:instance,:observer_key)'),{'username':current_user.id,'instance':name,'observer_key':key})
+                conn.execute(text('UPDATE observer_keys SET used=TRUE WHERE instance=:instance AND observer_key=:observer_key'),{'instance':name,'observer_key':observer_keys[0]})
+                keypath=os.path.join(config_dir,'player_keys.json')
+                if not os.path.isfile(keypath): raise ConfigError("required files not found: player_keys.json")
+                keyfile=open(keypath,'r')
+                try:
+                    player_keys=json.load(keyfile)
+                except:
+                    raise ConfigError('player_keys.json: invalid JSON')
+                keyfile.close()
+                for key in player_keys:
+                    if not isinstance(key,int): raise ConfigError("player_keys.json: non-integer found")
+                    conn.execute(text('INSERT INTO player_keys(username,instance,player_key) VALUES (:username,:instance,:player_key)'),{'username':current_user.id,'instance':name,'player_key':key})
+                spawn_new_instance(current_user.id,name,config_dir,observer_keys[0],start=request.form.get('autoStart'))
+                conn.commit()
+        elif type=="virtual":
+            url=request.form.get('url')
+            if not url:
+                raise ConfigError("URL is required for virtual instances")
+            
+            observer_key=int(request.form.get('primaryKey'))
+            if observer_key in (None,""):
+                raise ConfigError("Primary observer key is required for virtual instances")
+            if observer_key not in observer_keys:
+                raise ConfigError("Observer key is not valid")
+            with engine.connect() as conn:
+                conn.begin()
+                keyfile=open(keypath,'r')
+                try:
+                    player_keys=json.load(keyfile)
+                except:
+                    raise ConfigError('player_keys.json: invalid JSON')
+                for key in player_keys:
+                    if not isinstance(key,int): raise ConfigError("player_keys.json: non-integer found")
+                    conn.execute(text('INSERT INTO player_keys(username,instance,player_key) VALUES (:username,:instance,:player_key)'),{'username':current_user.id,'instance':name,'player_key':key})
+                for key in observer_keys:
+                    if not isinstance(key,int): raise ConfigError("observer_keys.json: non-integer found")
+                    conn.execute(text('INSERT INTO observer_keys (username,instance,observer_key) VALUES (:username,:instance,:observer_key)'),{'username':current_user.id,'instance':name,'observer_key':key})
+                conn.execute(text('UPDATE observer_keys SET used=TRUE WHERE instance=:instance AND observer_key=:observer_key'),{'instance':name,'observer_key':observer_key})
+                conn.execute(text('INSERT INTO virtual_instances (username,instance,observer_key,url,config_dir,ok_instance,ok_username) VALUES (:username,:instance,:observer_key,:url,:config_dir,:ok_instance,:ok_username)'),{'username':current_user.id,'instance':name,'observer_key':observer_key,'url':url,'config_dir':config_dir,'ok_instance':name,'ok_username':current_user.id})
+                conn.commit()
     except ConflictException:
         error_cleanup()
-        return render_template_with_user("new_instance.html",error="Docker container conflict. Please choose another name")
+        return render_template_with_user(error_template,error="Docker container conflict. Please choose another name")
     except ConfigError as e:
         error_cleanup()
-        return render_template_with_user("new_instance.html",error=f"Configuration error: {e.args[0]}")
+        return render_template_with_user(error_template,error=f"Configuration error: {e.args[0]}")
     except:
         error_cleanup()
         raise
@@ -314,6 +362,20 @@ def api_delete_instance():
         return jsonify({"error":"instance not found"}),404
     if '/' in instance: 
         return jsonify({"error":"only the owner can delete an instance"}),403
+    if instances[instance]['type']!="docker":
+        # remove a virtual instance. Delete only the database entries, we don't manage the instance itself so we can't do anything to it
+        with engine.connect() as conn:
+            conn.begin()
+            results=conn.execute(text("SELECT config_dir FROM virtual_instances WHERE username=:username AND instance=:instance"),{"username":current_user.id,"instance":instance})
+            config_dir=results.scalar()
+            if config_dir and os.path.isdir(config_dir):
+                import shutil
+                shutil.rmtree(config_dir)
+            conn.execute(text("DELETE FROM shared_instances WHERE instance=:instance AND share_source=:username"),{"username":current_user.id,"instance":instance})
+            conn.execute(text("DELETE FROM virtual_instances WHERE username=:username AND instance=:instance"),{"username":current_user.id,"instance":instance})
+            conn.execute(text("DELETE FROM observer_keys WHERE username=:username AND instance=:instance"),{"username":current_user.id,"instance":instance})
+            conn.commit()
+        return "",204
     container=instances[instance]
     if (error:=delete_instance(current_user.id,instance))['success']:
         import shutil
