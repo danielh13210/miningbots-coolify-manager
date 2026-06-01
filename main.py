@@ -6,6 +6,7 @@ import os
 import argon2
 from instances import *
 import jinja2
+from urllib.parse import urlparse
 
 class NoKeysException(RuntimeError): pass
 class ConfigError(TypeError): pass
@@ -321,7 +322,11 @@ def api_new_player():
                 pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
         with zipfile.ZipFile(os.path.join(uploaddir,"comppack.zip"),mode='w') as configpack:
             with configpack.open('server_config.json','w') as scfile:
-                scfile.write(format_config_template('server_config.json',hostname=f'{username}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
+                if instances[instance]['type']=="docker":
+                    scfile.write(format_config_template('server_config.json',hostname=f'{username}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
+                else:
+                    url=urlparse(instances[instance]['url'])
+                    scfile.write(format_config_template('server_config.json',hostname=url.hostname,port=url.port,security=url.scheme=="https").encode())
             with configpack.open('player_config.json','w') as pcfile:
               pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
     except ConflictException:
