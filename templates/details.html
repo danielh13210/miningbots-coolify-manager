@@ -42,7 +42,7 @@
   </nav>
   <h1>Details of instance {{instance}}</h1>
   <span
-    {% if not instances[instance]["running"] %}
+    {% if instances[instance]['type'] == 'docker' and not instances[instance]["running"] %}
       title="Instance is not running, start it to open the frontend."
       class="btn-wrapper disabled"
     {% else %}
