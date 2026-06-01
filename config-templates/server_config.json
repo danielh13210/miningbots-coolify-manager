@@ -1,6 +1,6 @@
 {# this is a template and is not proper json #}
 {
     "hostname": {{hostname|tojson}},
-    "port": {{(port if port else 443)|tojson}},
+    "port": {% if port %}{{port|tojson}}{% elif security %}443{% else %}80{% endif %},
     "security": {{(security if security else False)|tojson}}
 }
