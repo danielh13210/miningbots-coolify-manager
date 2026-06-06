@@ -42,7 +42,7 @@
   </nav>
   <h1>Details of instance {{instance}}</h1>
   <span
-    {% if not instances[instance]["running"] %}
+    {% if instances[instance]['type'] == 'docker' and not instances[instance]["running"] %}
       title="Instance is not running, start it to open the frontend."
       class="btn-wrapper disabled"
     {% else %}
@@ -50,20 +50,22 @@
     {% endif %}
   >
     <button class="btn btn-primary"
-      {% if not instances[instance]["running"] %}
+      {% if instances[instance]['type']=="docker" and not instances[instance]["running"] %}
         disabled
       {% endif %}
       onclick="window.open('{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}', '_blank')">
         Open Frontend
     </button>
   </span>
-  <span class="btn-wrapper">
-    {% if instances[instance]['running'] %}
-      <button class="btn btn-secondary" onclick="stop_instance_clicked('{{instance}}');" id="stop-instance-{{instance}}">Stop</button>
-    {% else %}
-      <button class="btn btn-primary" onclick="start_instance_clicked('{{instance}}');" id="start-instance-{{instance}}">Start</button>
-    {% endif %}
-  </span>
+  {% if instances[instance]['type']=="docker" %}
+    <span class="btn-wrapper">
+      {% if instances[instance]['running'] %}
+        <button class="btn btn-secondary" onclick="stop_instance_clicked('{{instance}}');" id="stop-instance-{{instance}}">Stop</button>
+      {% else %}
+        <button class="btn btn-primary" onclick="start_instance_clicked('{{instance}}');" id="start-instance-{{instance}}">Start</button>
+      {% endif %}
+    </span>
+  {% endif %}
   <span
     {% if '/' in instance %}
       title="Only the owner of an instance can share an instance."

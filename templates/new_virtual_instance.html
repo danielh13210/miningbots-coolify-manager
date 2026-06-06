@@ -46,20 +46,24 @@
     <div><a href="/static/config.zip">Download config here</a></div>
     <input style="margin-top:5px;margin-bottom:5px;" type="file" name="config-zip" accept=".zip,application/zip,application/x-zip-compressed" required />
     <div>
+      <label for="primaryKey">Primary Observer Key</label>
+      <input type="number" id="primaryKey" name="primaryKey" required />
+    </div>
+    <div>
+      <label for="url">URL of the server to connect to (including https://)</label>
+      <input type="url" id="url" name="url" required />
+    </div>
+    <div>
         <label for="name">Instance Name</label>
         <input type="text" id="name" name="name" pattern="[a-zA-Z0-9_\-]+" title="Only letters, numbers, dashes, and underscores allowed." maxlength="{{64-(username|length+1)}}" required/> {# Limit length to 64 chars total including username and dash #}
     </div>
-    <div>
-      <input type="checkbox" id="autoStart" name="autoStart">
-      <label for="autoStart">Auto Start</label>
-    </div>  
     <input type="submit" value="Continue" />
     {% if error %}
       <h3>{{error}}</h3>
     {% endif %}
     <br>
-    <input type="hidden" name="type" value="docker" />
-    <a href="/new?type=virtual">Connect to an existing server</a>
+    <input type="hidden" name="type" value="virtual" />
+    <a href="/new">Create a Docker-based instance</a>
   </form>
   <script>
     attachSubmitButton(document.querySelector('form'));

@@ -52,7 +52,7 @@
         {% endif %}
         <br>
         <span
-          {% if not instances[instance]["running"] %}
+          {% if instances[instance]['type'] == 'docker' and not instances[instance]["running"] %}
             title="Instance is not running, start it to open the frontend."
             class="btn-wrapper disabled"
           {% else %}
@@ -60,7 +60,7 @@
           {% endif %}
         >
           <button class="btn btn-primary"
-            {% if not instances[instance]["running"] %}
+            {% if instances[instance]['type'] == 'docker' and not instances[instance]["running"] %}
               disabled
             {% endif %}
             onclick="window.open('{{frontend_url}}/?url={{instances[instance]['url']}}&observer_key={{instances[instance]['observer_key']}}&instance_name={{instance}}', '_blank')">
