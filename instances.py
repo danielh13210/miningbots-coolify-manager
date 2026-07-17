@@ -38,7 +38,7 @@ def rebase_path_for_docker(path):
     relative_path = original_file.relative_to(old_base)
     return (new_base / relative_path).as_posix()
 
-def spawn_new_instance(username,name,config_dir,observer_key,start: bool=False):
+def spawn_new_instance(username,name,config_dir,observer_key):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
         payload={
             "Image": "miningbots-server",
@@ -62,7 +62,8 @@ def spawn_new_instance(username,name,config_dir,observer_key,start: bool=False):
                             "Target": "/miningbots-server/config",
                             "ReadOnly": True
                         }
-                    ]
+                    ],
+                    "AutoRemove": True  # Automatically remove the container when it exits
             }
         }
         resp = client.post(f"http://localhost/containers/create",
@@ -72,11 +73,11 @@ def spawn_new_instance(username,name,config_dir,observer_key,start: bool=False):
             if resp.status_code==409:
                 raise ConflictException
             else:
-                raise Exception(f"cannot create: http error {resp.status_code} {resp.json()}")
-        if start:
-            start_url = f"http://localhost/containers/{username}-{name}/start"
-            resp = client.post(start_url)
-            if resp.status_code!=204: raise Exception(f"cannot start: http error {resp.status_code} {resp.json()}")
+                return {'success':False,'rawError':resp.json()}
+        start_url = f"http://localhost/containers/{username}-{name}/start"
+        resp = client.post(start_url)
+        if resp.status_code!=204: return {'success':False,'rawError':resp.json()}
+        return {'success':True,'rawError':None}
 
 def spawn_player(username, player, instance, instances):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
@@ -130,38 +131,30 @@ def parse_container_name(username,container_name):
         return container_name.split('/',maxsplit=1)
     else:
         return username, container_name
-    
+
 def get_active_instances(username,db_conn):
     with db_conn.connect() as conn:
         result=conn.execute(text("SELECT share_source, instance FROM shared_instances WHERE share_destination=:me"),{"me":username})
         matches=result.fetchall()
-        additional_container_names=list(map(lambda row:row[0]+'-'+row[1],matches))
-        result=conn.execute(text("SELECT instance, observer_key, url,config_dir FROM virtual_instances WHERE username=:me"),{"me":username})
-        matches=result.fetchall()
-        virtual_instance_names=matches
-    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        # Filter for containers that have the label "miningbots-app-instance"
-        r = client.get(
-            "http://localhost/containers/json",
-            params={"filters": json.dumps({"label":["miningbots-app-instance"],"name":[f"^{username}-.*"]+additional_container_names}),"all":'true'}
-        )
-        containers = r.json()
-    def container_entry(container, username):
-        # derive the name
-        raw_name = os.path.basename(container['Names'][0])
-        if raw_name.startswith(username):
-            name = raw_name.split('-', maxsplit=1)[1]
-        else:
-            name = '/'.join(raw_name.split('-', maxsplit=1))
+        shared_instances=list(matches)
 
-        # build the value dict
-        return name, {
-            'url': f'https://{get_traefik_host(container)}',
-            'observer_key': get_observer_key(container),
-            'type': 'docker',
-            'running': container['State'] == 'running',
-            'config_dir': container['Labels'].get('configdir'),
-        }
+        result=conn.execute(text("SELECT instance, observer_key, url,config_dir FROM virtual_instances WHERE username=:me"),{"me":username})
+        virtual_instances=result.fetchall()
+
+        result=conn.execute(text("SELECT instance, observer_key, url, config_dir FROM container_instances WHERE username=:me"),{"me":username})
+        containers = result.fetchall()
+    def container_entry(instance, username):
+        with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+            r = client.get(
+                f"http://localhost/containers/{username}-{instance[0]}/json"
+            )
+            return instance[0], {
+                'url': instance[2],
+                'observer_key': instance[1],
+                'type': 'docker',
+                'running': r.status_code==200 and r.json()['State']['Running'], # the container's are ephemeral so an error would occur if they're stopped
+                'config_dir': instance[3]
+            }
     def virtual_entry(instance, username):
         return instance[0], {
             'url': instance[2],
@@ -170,11 +163,37 @@ def get_active_instances(username,db_conn):
             'running': None, # we can't actually know as we don't manage it
             'config_dir': instance[3]
         }
-
+    def shared_entry(instance_in, username):
+        with db_conn.connect() as conn:
+            result=conn.execute(text("SELECT username, instance, observer_key, url, config_dir FROM virtual_instances WHERE username=:source AND instance=:instance"),{"source":instance_in[0],"instance":instance_in[1]})
+            instance=result.fetchone()
+            if instance:
+                return instance[0]+'/'+instance[1], {
+                    'url': instance[3],
+                    'observer_key': instance[2],
+                    'type': 'virtual',
+                    'running': None,
+                    'config_dir': instance[4]
+                }
+            result=conn.execute(text("SELECT username, instance, observer_key, url, config_dir FROM container_instances WHERE username=:source AND instance=:instance"),{"source":instance_in[0],"instance":instance_in[1]})
+            instance=result.fetchone()
+            if instance:
+                with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
+                    r = client.get(
+                        f"http://localhost/containers/{instance[0]}-{instance[1]}/json"
+                    )
+                return instance[0]+'/'+instance[1], {
+                    'url': instance[3],
+                    'observer_key': instance[2],
+                    'type': 'docker',
+                    'running': r.status_code==200 and r.json()['State']['Running'], # the container's are ephemeral so an error would occur if they're stopped
+                    'config_dir': instance[4]
+                }
     # now build the dict
     return dict(
         [container_entry(container, username) for container in containers] +
-        [virtual_entry(instance, username) for instance in virtual_instance_names]
+        [virtual_entry(instance, username) for instance in virtual_instances] +
+        [shared_entry(instance, username) for instance in shared_instances]
     )
 
 def stop_instance(username,instance):
@@ -187,34 +206,31 @@ def stop_instance(username,instance):
         except:
             content=None
         return {'success':response.status_code==204,'rawError':content} # return true if success
-def delete_instance(username,instance):
-    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        user, name = parse_container_name(username, instance)
-        response = client.delete(f"http://localhost/containers/{user}-{name}",timeout=httpx.Timeout(30.0))
+def delete_instance(username,instance,db_conn):
+    with db_conn.connect() as conn:
+        result=conn.execute(text("SELECT config_dir FROM container_instances WHERE username=:me AND instance=:instance"),{"me":username,"instance":instance})
+        result=result.fetchone()
+        if result:
+            import shutil
+            shutil.rmtree(result[0],ignore_errors=True)
+            return {'success': True,'rawError': None}
+        else:
+            return {'success': False,'rawError': "Instance not found"}
 
-        try:
-            content=response.json()
-        except:
-            content=None
-        return {'success':response.status_code==204,'rawError':content} # return true if success
-def start_instance(username,instance):
+def is_player_testserver_running(username,player,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        user, name = parse_container_name(username, instance)
-        response = client.post(f"http://localhost/containers/{user}-{name}/start",timeout=httpx.Timeout(30.0))
-
-        try:
-            content=response.json()
-        except:
-            content=None
-        return {'success':response.status_code==204,'rawError':content} # return true if success
+        response = client.get(f"http://localhost/containers/{username}-{instance}-{player}/json")
+        if response.status_code==404:
+            return False
+        elif response.status_code==200:
+            return response.json()['State']['Running']
+        else:
+            raise Exception(f"failed to check test server: http error {response.status_code} {response.json()}")
 
 def delete_player(username,player,instance):
     with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        candidate = f"{instance}-{player}"
-        user, rest = parse_container_name(username, candidate)
-        response = client.delete(
-            f"http://localhost/containers/{user}-{rest}",
-            params={'force':'true'},
+        response = client.post(
+            f"http://localhost/containers/{username}-{instance}-{player}/stop",
             timeout=httpx.Timeout(30.0)
         )
 

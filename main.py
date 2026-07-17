@@ -90,7 +90,7 @@ class InstanceShares(Base):
     __table_args__ = (
         PrimaryKeyConstraint("share_destination","share_source","instance"),
     )
-        
+
 class VirtualInstanceEntry(Base):
     from sqlalchemy import Column, String, BigInteger, text, PrimaryKeyConstraint, ForeignKey, ForeignKeyConstraint
     __tablename__ = "virtual_instances"
@@ -100,6 +100,23 @@ class VirtualInstanceEntry(Base):
     observer_key=Column(BigInteger, nullable=False)
     url=Column(String, nullable=False)
     config_dir=Column(String, nullable=False)
+    # not needed, but makes foreign key constraints work because of the composite key
+    ok_instance=Column(String, nullable=False)
+    ok_username=Column(String, nullable=False)
+    __table_args__ = (
+        PrimaryKeyConstraint("username","instance"),
+        ForeignKeyConstraint(['observer_key','ok_instance','ok_username'],["observer_keys.observer_key","observer_keys.instance","observer_keys.username" ]),
+    )
+
+class ContainerInstanceEntry(Base):
+    from sqlalchemy import Column, String, BigInteger, text, PrimaryKeyConstraint, ForeignKey, ForeignKeyConstraint
+    __tablename__ = "container_instances"
+
+    username=Column(String, ForeignKey("im_users.id"), nullable=False)
+    instance=Column(String, nullable=False)
+    config_dir=Column(String, nullable=False)
+    observer_key=Column(BigInteger, nullable=False)
+    url=Column(String, nullable=False)
     # not needed, but makes foreign key constraints work because of the composite key
     ok_instance=Column(String, nullable=False)
     ok_username=Column(String, nullable=False)
@@ -179,7 +196,7 @@ def details():
         player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username}).fetchall()
         players=[player_row[0] for player_row in player_rows]
     # Render index.html from the templates folder
-    if not os.path.isdir(instances[instance]['config_dir']):
+    if not os.path.isdir(instances[instance_raw]['config_dir']):
         return render_template_with_user("details.html", instance=instance_raw, instances=instances,players=players,nocorrupt=False,corrupt_error="cannot find config dir for instance, please recreate this instance",frontend_url=os.environ['fe_host'])
     return render_template_with_user("details.html", instance=instance_raw, instances=instances,players=players,nocorrupt=True,frontend_url=os.environ['fe_host'])
 
@@ -239,13 +256,16 @@ def api_new_instance():
                 for key in player_keys:
                     if not isinstance(key,int): raise ConfigError("player_keys.json: non-integer found")
                     conn.execute(text('INSERT INTO player_keys(username,instance,player_key) VALUES (:username,:instance,:player_key)'),{'username':current_user.id,'instance':name,'player_key':key})
-                spawn_new_instance(current_user.id,name,config_dir,observer_keys[0],start=request.form.get('autoStart'))
+                conn.execute(text('INSERT INTO container_instances (username,instance,config_dir,observer_key,url,ok_instance,ok_username) VALUES (:username,:instance,:config_dir,:observer_key,:url,:instance,:username)'),{'username':current_user.id,'instance':name,'config_dir':config_dir,'observer_key':observer_keys[0],'url':f'https://{current_user.id}-{name}-mb.{os.environ["BASE_DOMAIN"]}'})
+                autoStart=request.form.get('autoStart')
+                if autoStart:
+                    spawn_new_instance(current_user.id,name,config_dir,observer_keys[0])
                 conn.commit()
         elif type=="virtual":
             url=request.form.get('url')
             if not url:
                 raise ConfigError("URL is required for virtual instances")
-            
+
             observer_key=int(request.form.get('primaryKey'))
             if observer_key in (None,""):
                 raise ConfigError("Primary observer key is required for virtual instances")
@@ -312,7 +332,6 @@ def api_new_player():
                 raise NoKeysException()
             conn.execute(text("INSERT INTO users (id, password) VALUES (:id,:password)"),{"id":credentials["userID"],"password":argon2.PasswordHasher().hash(credentials["password"])})
             conn.execute(text("INSERT INTO players (username,name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key) VALUES (:username,:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key)"),{"username":username,"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key})
-            spawn_player(username,name,instance,instances)
             conn.commit()
         os.makedirs (uploaddir,exist_ok=True)
         with zipfile.ZipFile(os.path.join(uploaddir,"testpack.zip"),mode='w') as configpack:
@@ -322,10 +341,10 @@ def api_new_player():
                 pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
         with zipfile.ZipFile(os.path.join(uploaddir,"comppack.zip"),mode='w') as configpack:
             with configpack.open('server_config.json','w') as scfile:
-                if instances[instance]['type']=="docker":
+                if instances[instance_raw]['type']=="docker":
                     scfile.write(format_config_template('server_config.json',hostname=f'{username}-{instance}-mb.{os.environ["BASE_DOMAIN"]}').encode())
                 else:
-                    url=urlparse(instances[instance]['url'])
+                    url=urlparse(instances[instance_raw]['url'])
                     scfile.write(format_config_template('server_config.json',hostname=url.hostname,port=url.port,security=url.scheme=="https").encode())
             with configpack.open('player_config.json','w') as pcfile:
               pcfile.write(format_config_template('player_config.json',player_name=f'{name}',player_key=player_key,observer_name=f'{name}:observer',observer_key=observer_key).encode())
@@ -365,50 +384,42 @@ def api_delete_instance():
         return jsonify({"error":"instance name required"}),500
     if instance not in (instances:=get_active_instances(current_user.id,engine)):
         return jsonify({"error":"instance not found"}),404
-    if '/' in instance: 
+    if '/' in instance:
         return jsonify({"error":"only the owner can delete an instance"}),403
-    if instances[instance]['type']!="docker":
+    with engine.connect() as conn:
+        conn.begin()
+        import shutil
+        config_dir=instances[instance]['config_dir']
+        if config_dir and os.path.isdir(config_dir):
+            shutil.rmtree(config_dir)
+        conn.execute(text("DELETE FROM shared_instances WHERE instance=:instance AND share_source=:username"),{"username":current_user.id,"instance":instance})
         # remove a virtual instance. Delete only the database entries, we don't manage the instance itself so we can't do anything to it
-        with engine.connect() as conn:
-            conn.begin()
-            results=conn.execute(text("SELECT config_dir FROM virtual_instances WHERE username=:username AND instance=:instance"),{"username":current_user.id,"instance":instance})
-            config_dir=results.scalar()
-            if config_dir and os.path.isdir(config_dir):
-                import shutil
-                shutil.rmtree(config_dir)
-            conn.execute(text("DELETE FROM shared_instances WHERE instance=:instance AND share_source=:username"),{"username":current_user.id,"instance":instance})
+        if instances[instance]['type']!="docker":
             conn.execute(text("DELETE FROM virtual_instances WHERE username=:username AND instance=:instance"),{"username":current_user.id,"instance":instance})
             conn.execute(text("DELETE FROM observer_keys WHERE username=:username AND instance=:instance"),{"username":current_user.id,"instance":instance})
             conn.commit()
-        return "",204
-    container=instances[instance]
-    if (error:=delete_instance(current_user.id,instance))['success']:
-        import shutil
-        if container['config_dir'] and os.path.isdir(container['config_dir']):
-            shutil.rmtree(container['config_dir'])
-        with engine.connect() as conn:
-            conn.begin()
-            ownerIDs=[]
-            player_keys=[]
-            observer_keys=[]
-            for row in conn.execute(text("SELECT name, instance, uploaddir, \"ownerID\", player_key, observer_key FROM players WHERE instance=:instance AND username=:username"),{"instance":instance,"username":current_user.id}).fetchall():
-                uploaddir=row[2]
-                shutil.rmtree(uploaddir)
-                delete_player(current_user.id,row[0],row[1])
-                ownerIDs.append(row[3])
-                player_keys.append(row[4])
-                observer_keys.append(row[5])
-            conn.execute(text("DELETE FROM players WHERE instance=:instance AND username=:username"),{"instance":instance,"username":current_user.id})
-            for ownerID in ownerIDs:
-                conn.execute(text("DELETE FROM users WHERE id=:ownerID"),{"ownerID":ownerID})
-            # reclaim the keys
-            conn.execute(text("DELETE FROM player_keys WHERE instance=:instance AND username=:username"),{"instance":instance,"username":current_user.id})
-            conn.execute(text("DELETE FROM observer_keys WHERE instance=:instance AND username=:username"),{"instance":instance,"username":current_user.id})
-            conn.commit()
-
-        return "",204
-    else:
-        return jsonify({"error":"failed to delete","rawError":error['rawError']}),500
+            return "",204
+        username, instance=parse_container_name(current_user.id,instance)
+        conn.execute(text("DELETE FROM container_instances WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username})
+        ownerIDs=[]
+        player_keys=[]
+        observer_keys=[]
+        for row in conn.execute(text("SELECT name, instance, uploaddir, \"ownerID\", player_key, observer_key FROM players WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username}).fetchall():
+            uploaddir=row[2]
+            shutil.rmtree(uploaddir)
+            if is_player_testserver_running(username,row[0],instance):
+                delete_player(username,row[0],instance)
+            ownerIDs.append(row[3])
+            player_keys.append(row[4])
+            observer_keys.append(row[5])
+        conn.execute(text("DELETE FROM players WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username})
+        for ownerID in ownerIDs:
+            conn.execute(text("DELETE FROM users WHERE id=:ownerID"),{"ownerID":ownerID})
+        # reclaim the keys
+        conn.execute(text("DELETE FROM player_keys WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username})
+        conn.execute(text("DELETE FROM observer_keys WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username})
+        conn.commit()
+    return "",204
 @app.route("/players/delete",methods=['DELETE'])
 @login_required
 def api_delete_player():
@@ -424,8 +435,8 @@ def api_delete_player():
         row=conn.execute(text("SELECT uploaddir,\"ownerID\",player_key,observer_key FROM players WHERE name=:name AND instance=:instance AND username=:username"),{"instance":instance,"name":player,"username":username}).fetchone() # fetch one, it's unique
         if not row:
             return jsonify({"error":"player not found on instance"}),404
-        if not (error:=delete_player(username,player,instance))['success']:
-            return jsonify({"error":"failed to delete test server","rawError":error['rawError']}),500
+        if is_player_testserver_running(username,player,instance):
+            delete_player(username,player,instance)
         import shutil
         shutil.rmtree(row[0])
         conn.execute(text("DELETE FROM players WHERE name=:name AND username=:username AND instance=:instance"),{"instance":instance,"name":player,"username":username})
@@ -441,9 +452,11 @@ def api_start_instance():
         instance=request.args['instance']
     except KeyError:
         return jsonify({"error":"instance name required"}),500
-    if instance not in get_active_instances(current_user.id,engine):
+    if instance not in (instances:=get_active_instances(current_user.id,engine)):
         return jsonify({"error":"instance not found"}),404
-    if (error:=start_instance(current_user.id,instance))['success']:
+    raw_instance=instance
+    username, instance=parse_container_name(current_user.id,instance)
+    if (error:=spawn_new_instance(username,instance,instances[raw_instance]['config_dir'],instances[raw_instance]['observer_key']))['success']:
         return "",204
     else:
         return jsonify({"error":"failed to start","rawError":error['rawError']}),500
