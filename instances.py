@@ -79,40 +79,6 @@ def spawn_new_instance(username,name,config_dir,observer_key):
         if resp.status_code!=204: return {'success':False,'rawError':resp.json()}
         return {'success':True,'rawError':None}
 
-def spawn_player(username, player, instance, instances):
-    with httpx.Client(transport=httpx.HTTPTransport(uds="/var/run/docker.sock")) as client:
-        payload={
-            "Image": "miningbots-server",
-            "Labels": {
-                "traefik.enable": "true",
-                f"traefik.http.routers.{username}-{instance}-{player}-mb.rule": f'Host("{username}-{instance}-{player}-mb.{os.environ['BASE_DOMAIN']}")',
-                f"traefik.http.routers.{username}-{instance}-{player}-mb.entrypoints": "https",
-                f"traefik.http.routers.{username}-{instance}-{player}-mb.tls": "true",
-                f"traefik.http.routers.{username}-{instance}-{player}-mb.tls.certresolver": "letsencrypt",
-                f"traefik.http.services.{username}-{instance}-{player}.loadbalancer.server.port": "9003",
-                "observer_key": str(instances[instance]['observer_key']) # labels must be strings
-            },
-            "HostConfig": {
-                "NetworkMode": "mb-instances",
-                    "Mounts": [
-                        {
-                            "Type": "bind",
-                            "Source": rebase_path_for_docker(instances[instance]['config_dir']),
-                            "Target": "/miningbots-server/config",
-                            "ReadOnly": True
-                        }
-                    ]
-            }
-        }
-        resp = client.post(f"http://localhost/containers/create",
-                           params={"name":f"{username}-{instance}-{player}"},
-                           json=payload)
-        if resp.status_code!=201:
-            if resp.status_code==409:
-                raise ConflictException
-            else:
-                raise Exception(f"cannot create: http error {resp.status_code} {resp.json()}")
-
 def get_traefik_host(container):
     labels=container['Labels']
     for label in labels:

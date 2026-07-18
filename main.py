@@ -43,6 +43,8 @@ class PlayerEntry(Base):
     ownerID = Column(String, ForeignKey("users.id"), nullable=False)
     player_key = Column(BigInteger, nullable=False)
     observer_key = Column(BigInteger, nullable=False)
+    instance_observer_key = Column(BigInteger, nullable=False)
+    instance_config_dir = Column(String, nullable=False)
     testserver = Column(String, nullable=False)
 
     # the following columns are unused, and are needed for foreign key only
@@ -331,7 +333,7 @@ def api_new_player():
             else:
                 raise NoKeysException()
             conn.execute(text("INSERT INTO users (id, password) VALUES (:id,:password)"),{"id":credentials["userID"],"password":argon2.PasswordHasher().hash(credentials["password"])})
-            conn.execute(text("INSERT INTO players (username,name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key) VALUES (:username,:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key)"),{"username":username,"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key})
+            conn.execute(text("INSERT INTO players (username,name,instance,uploaddir,\"ownerID\",testserver,player_key,observer_key,instance_observer_key,instance_config_dir) VALUES (:username,:name,:instance,:uploaddir,:owner,:testserver,:player_key,:observer_key,:instance_observer_key,:instance_config_dir)"),{"username":username,"name":name,"instance":instance,"uploaddir":uploaddir,"owner":credentials["userID"],"testserver":f'{name}-{instance}',"player_key":player_key,"observer_key":observer_key,"instance_observer_key":instances[instance]['observer_key'],"instance_config_dir":instances[instance]['config_dir']})
             conn.commit()
         os.makedirs (uploaddir,exist_ok=True)
         with zipfile.ZipFile(os.path.join(uploaddir,"testpack.zip"),mode='w') as configpack:
