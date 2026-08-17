@@ -524,7 +524,11 @@ def api_share():
 @login_view('/login')
 def login():
     if current_user.is_authenticated:
-        return redirect(request.args.get('next') or '/')
+        next=request.args.get('next')
+        if next and next.startswith('/'):
+            return redirect(next)
+        else:
+            return redirect('/')
     return render_template("login.html")
 
 @app.route("/login", methods=['POST'])
@@ -533,7 +537,11 @@ def login_post():
     password = request.form.get('password')
     if check_user(username,password):
         login_user(User(id=username))
-        return redirect(request.args.get('next') or '/')
+        next=request.args.get('next')
+        if next and next.startswith('/'):
+            return redirect(next)
+        else:
+            return redirect('/')
     else:
         return render_template("login.html",error="Login incorrect")
 
