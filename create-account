@@ -3,6 +3,7 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base
 import os, sys, getpass, argon2
+import secrets
 engine=create_engine(os.environ['POSTGRES_CONNECT_URI'])
 
 Base = declarative_base()
@@ -16,5 +17,5 @@ Base.metadata.create_all(engine)
 
 with engine.connect() as conn:
     conn.begin()
-    conn.execute(text("INSERT INTO im_users (id,password) VALUES (:id,:password) ON CONFLICT (id) DO NOTHING"),{"id":sys.argv[1],"password":argon2.PasswordHasher().hash(getpass.getpass("Password: "))})
+    conn.execute(text("INSERT INTO im_users (id,password,\"passwordChangeNonce\") VALUES (:id,:password,:nonce) ON CONFLICT (id) DO NOTHING"),{"id":sys.argv[1],"password":argon2.PasswordHasher().hash(getpass.getpass("Password: ")),"nonce":secrets.randbits(63)})
     conn.commit()

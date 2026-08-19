@@ -28,11 +28,12 @@ class UserEntry(Base):
     password = Column(String, nullable=False) # not the password, the hex hash
 
 class IMUserEntry(Base):
-    from sqlalchemy import Column, String
+    from sqlalchemy import Column, String, BigInteger
     __tablename__ = "im_users"
 
     id = Column(String, primary_key=True)
     password = Column(String, nullable=False) # not the password, the hex hash
+    passwordChangeNonce = Column(BigInteger, nullable=False)
 
 class PlayerEntry(Base):
     from sqlalchemy import Column, BigInteger, String, ForeignKey, PrimaryKeyConstraint, ForeignKeyConstraint
@@ -134,15 +135,15 @@ _redis_pool = None
 
 def get_redis_client():
     """
-    Lazy initialization. This guarantees the Connection Pool is spawned 
+    Lazy initialization. This guarantees the Connection Pool is spawned
     separately inside the memory space of whichever Gunicorn worker calls it.
     """
     global _redis_pool
     if _redis_pool is None:
         # max_connections limits the capacity PER WORKER
         _redis_pool = redis.ConnectionPool.from_url(
-            os.environ.get("REDIS_CONNECT_URI"), 
-            decode_responses=True, 
+            os.environ.get("REDIS_CONNECT_URI"),
+            decode_responses=True,
             max_connections=10
         )
     return redis.Redis(connection_pool=_redis_pool)
@@ -154,20 +155,20 @@ def get_cookie_expiry_timestamp(raw_cookie_string: str) -> int:
     """
     session_interface = SecureCookieSessionInterface()
     serializer = session_interface.get_signing_serializer(app)
-    
+
     # Get your configured session duration in total seconds (e.g., 604800)
     max_age_seconds = int(app.permanent_session_lifetime.total_seconds())
-    
+
     # loads_with_timestamp decrypts and extracts the birth datetime of the cookie
     _, created_at_datetime = serializer.loads(
-        raw_cookie_string, 
+        raw_cookie_string,
         max_age=max_age_seconds,
         return_timestamp=True  # ◄── This forces the return of the creation stamp
     )
-    
+
     # Convert the creation datetime to a standard Unix Epoch Integer
     created_at_epoch = int(created_at_datetime.timestamp())
-    
+
     # Absolute Expiry = Born Timestamp + Allowed Lifespan
     absolute_expiry_epoch = created_at_epoch + max_age_seconds
     return absolute_expiry_epoch
@@ -210,18 +211,19 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 
 class User(UserMixin):
-    def __init__(self, id, session_id):
+    def __init__(self, id, session_id, nonce):
         self.id = id
         self.session_id = session_id
+        self.nonce = nonce
 
     def get_id(self):
-        return self.id+'-'+str(self.session_id)
+        return self.id+'-'+str(self.session_id)+'-'+str(self.nonce)
 
 @app.before_request
 def force_permanent_session_lifecycle():
     """
-    By setting this here, Flask is forced to treat the current browser cookie 
-    as long-lived, injecting the Max-Age and Expires headers automatically 
+    By setting this here, Flask is forced to treat the current browser cookie
+    as long-lived, injecting the Max-Age and Expires headers automatically
     on the outgoing HTTP response.
     """
     session.permanent = True
@@ -229,12 +231,22 @@ def force_permanent_session_lifecycle():
 @login_manager.user_loader
 def load_user(user_id):
     components=user_id.split('-')
-    user_id='-'.join(components[:-1])
-    session_id=int(components[-1])
-    if get_redis_client().get(f'banned-session-{session_id}')=='':
+    user_id='-'.join(components[:-2])
+    session_id=int(components[-2])
+    nonce=int(components[-1])
+    redis_client=get_redis_client()
+    if redis_client.get(f'banned-session-{session_id}')=='':
         return None
+    # cache the nonce
+    if not (db_nonce:=redis_client.get(f'nonce.{user_id}')):
+        with engine.connect() as conn:
+            db_nonce=conn.execute(text("SELECT \"passwordChangeNonce\" FROM im_users WHERE id=:id"),{"id":user_id}).scalar()
+            redis_client.set(f'nonce.{user_id}',db_nonce)
+    db_nonce=int(db_nonce)
+    if db_nonce!=nonce:
+       return None # the password was changed on another device
     # this session is permitted
-    return User(user_id,session_id)
+    return User(user_id,session_id,nonce)
 
 
 def render_template_with_user(template_name, **kwargs):
@@ -606,7 +618,14 @@ def login_post():
     password = request.form.get('password')
     if check_user(username,password):
         import secrets
-        login_user(User(id=username,session_id=secrets.randbits(128)))
+        redis_client=get_redis_client()
+        if nonce:=redis_client.get(f'nonce.{username}'):
+            nonce=int(nonce)
+        else:
+            with engine.connect() as conn:
+                nonce=conn.execute(text("SELECT \"passwordChangeNonce\" FROM im_users WHERE id=:id"),{"id":username}).scalar()
+                redis_client.set(f'nonce.{username}',nonce)
+        login_user(User(id=username,session_id=secrets.randbits(128),nonce=nonce))
         next=request.args.get('next')
         if next and next.startswith('/'):
             return redirect(next)
@@ -626,8 +645,12 @@ def change_password_post():
     if new_password!=confirm_password:
         return render_template_with_user("change_password.html",error="New password and confirmation do not match")
     with engine.connect() as conn:
-        conn.execute(text("UPDATE im_users SET password=:password WHERE id=:id"),{"password":argon2.PasswordHasher().hash(new_password),"id":current_user.id})
+        import secrets
+        nonce=secrets.randbits(63)
+        conn.execute(text("UPDATE im_users SET password=:password,\"passwordChangeNonce\"=:nonce WHERE id=:id"),{"password":argon2.PasswordHasher().hash(new_password),"id":current_user.id,"nonce":nonce})
         conn.commit()
+    get_redis_client().set(f'nonce.{current_user.id}',nonce)
+    login_user(User(id=current_user.id,session_id=current_user.session_id,nonce=nonce))
     return render_template_with_user("cp_success.html")
 
 @app.route("/logout")
