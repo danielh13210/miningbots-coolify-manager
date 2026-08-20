@@ -130,6 +130,8 @@ class ContainerInstanceEntry(Base):
         ForeignKeyConstraint(['observer_key','ok_instance','ok_username'],["observer_keys.observer_key","observer_keys.instance","observer_keys.username" ]),
     )
 
+Base.metadata.create_all(engine)
+
 import redis
 _redis_pool = None
 
@@ -187,17 +189,12 @@ def check_user(id,password):
         except argon2.exceptions.VerifyMismatchError:
             return False
 
-#def is_token_valid():
-
-
 # wrapper for login required routes
 def login_view(route,*args,**kwargs):
     def wrapper(view):
         login_manager.login_view = route
         return app.route(route,*args,**kwargs)(view)
     return wrapper
-
-Base.metadata.create_all(engine)
 
 config_templates=jinja2.Environment(loader=jinja2.FileSystemLoader('config-templates'))
 def format_config_template(file, **kwargs):
@@ -656,7 +653,6 @@ def change_password_post():
 @app.route("/logout")
 @login_required
 def logout():
-    import random
     cookie=request.cookies.get('session')
     get_redis_client().set(f'banned-session-{current_user.session_id}','',exat=get_cookie_expiry_timestamp(cookie))
     logout_user()
