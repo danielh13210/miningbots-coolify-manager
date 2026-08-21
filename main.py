@@ -521,6 +521,7 @@ def api_delete_player():
         shutil.rmtree(row[0])
         conn.execute(text("DELETE FROM players WHERE name=:name AND username=:username AND instance=:instance"),{"instance":instance,"name":player,"username":username})
         conn.execute(text("DELETE FROM users WHERE id=:id"),{"id":row[1]})
+        get_redis_client().delete(f"userstate.competition-manager.{row[1]}")
         conn.execute(text("UPDATE player_keys SET used=FALSE WHERE instance=:instance AND username=:username AND player_key=:player_key"),{"instance":instance,"username":username,"player_key":row[2]})
         conn.execute(text("UPDATE observer_keys SET used=FALSE WHERE instance=:instance AND username=:username AND observer_key=:observer_key"),{"instance":instance,"username":username,"observer_key":row[3]})
         conn.commit()
