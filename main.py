@@ -234,6 +234,16 @@ def load_user(user_id):
     redis_client=get_redis_client()
     if redis_client.get(f'banned-session-{session_id}')=='':
         return None
+    user_exists=redis_client.get(f'userstate.{user_id}')
+    if user_exists is None:
+        #check postgres
+        with engine.connect() as conn:
+            user_exists=bool(conn.execute(text("SELECT id FROM im_users WHERE id=:userid"),{"userid":user_id}).scalar())
+            cookie=request.cookies.get('session')
+            redis_client.set(f'userstate.{user_id}',str(user_exists),exat=get_cookie_expiry_timestamp(cookie))
+    user_exists=user_exists=="True"
+    if not user_exists:
+      return None
     # cache the nonce
     if not (db_nonce:=redis_client.get(f'nonce.{user_id}')):
         with engine.connect() as conn:
