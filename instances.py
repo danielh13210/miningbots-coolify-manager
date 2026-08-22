@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 traefik_rule_matcher=re.compile(r'traefik\..*\.rule')
 get_host=re.compile(r'Host\("(.*)"\)')
+docker_container_name_suffix_valid=re.compile("[a-zA-Z0-9_.-]+")
 
 class ConflictException(ValueError): pass
 

@@ -328,6 +328,8 @@ def api_new_instance():
         name=request.form.get('name')
         type=request.form.get('type')
         error_template="new_instance.html" if type=="docker" else "new_virtual_instance.html" # to render errors
+        if not docker_container_name_suffix_valid.fullmatch(name):
+            raise ConfigError("Name invalid")
         if type=="docker":
             with engine.connect() as conn:
                 conn.begin()
@@ -402,6 +404,8 @@ def api_new_player():
             return render_template_with_user("new_player.html",instance=instance_raw,error="Player name and instance name required")
         if instance not in instances:
             return render_template_with_user("new_player.html",instance=instance_raw,error="Instance not found")
+        if not docker_container_name_suffix_valid.fullmatch(name):
+            raise ConfigError("Name invalid")
         uploaddir=f"/tmp/{containerName}"
         import secrets,base64
         credentials={"userID":userID,"password":base64.b64encode(secrets.token_bytes(8)).decode()}
@@ -442,6 +446,8 @@ def api_new_player():
         return render_template_with_user("new_player.html",instance=instance_raw,error="Player name conflict. Please choose another name")
     except NoKeysException:
         return render_template_with_user("new_player.html",instance=instance_raw,error="No keys left, the instance cannot fit any more players")
+    except ConfigError as e:
+        return render_template_with_user("new_player.html",instance=instance_raw,error=f"Input error: {e.args[0]}")
     with engine.connect() as conn:
         player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username}).fetchall()
         players=[player_row[0] for player_row in player_rows]
