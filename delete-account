@@ -17,6 +17,9 @@ Base.metadata.create_all(engine)
 
 with engine.connect() as conn:
     conn.begin()
+    if conn.execute(text("SELECT id FROM im_users WHERE id=:id"),{"id":sys.argv[1]}).fetchone() is None:
+        print("User does not exist")
+        sys.exit(1)
     conn.execute(text("DELETE FROM shared_instances WHERE share_source=:id OR share_destination=:id"),{"id":sys.argv[1]})
     results=conn.execute(text("SELECT uploaddir, username, name, instance, \"ownerID\" FROM players WHERE username=:username"),{"username":sys.argv[1]})
     for player in results.fetchall():
