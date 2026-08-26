@@ -15,6 +15,24 @@ class IMUserEntry(Base):
     password = Column(String, nullable=False) # not the password, the hex hash
 Base.metadata.create_all(engine)
 
+import redis
+_redis_pool = None
+
+def get_redis_client():
+    """
+    Lazy initialization. This guarantees the Connection Pool is spawned
+    separately inside the memory space of whichever Gunicorn worker calls it.
+    """
+    global _redis_pool
+    if _redis_pool is None:
+        # max_connections limits the capacity PER WORKER
+        _redis_pool = redis.ConnectionPool.from_url(
+            os.environ.get("REDIS_CONNECT_URI"),
+            decode_responses=True,
+            max_connections=10
+        )
+    return redis.Redis(connection_pool=_redis_pool)
+
 with engine.connect() as conn:
     conn.begin()
     if conn.execute(text("SELECT id FROM im_users WHERE id=:id"),{"id":sys.argv[1]}).fetchone() is None:
@@ -37,4 +55,5 @@ with engine.connect() as conn:
         stop_instance(sys.argv[1],instance)
         delete_instance(sys.argv[1],instance)
     conn.execute(text("DELETE FROM im_users WHERE id=:id"),{"id":sys.argv[1]})
+    get_redis_client().delete(f"userstate.{sys.argv[1]}")
     conn.commit()

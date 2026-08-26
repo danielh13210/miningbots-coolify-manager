@@ -130,6 +130,8 @@ class ContainerInstanceEntry(Base):
         ForeignKeyConstraint(['observer_key','ok_instance','ok_username'],["observer_keys.observer_key","observer_keys.instance","observer_keys.username" ]),
     )
 
+Base.metadata.create_all(engine)
+
 import redis
 _redis_pool = None
 
@@ -187,17 +189,12 @@ def check_user(id,password):
         except argon2.exceptions.VerifyMismatchError:
             return False
 
-#def is_token_valid():
-
-
 # wrapper for login required routes
 def login_view(route,*args,**kwargs):
     def wrapper(view):
         login_manager.login_view = route
         return app.route(route,*args,**kwargs)(view)
     return wrapper
-
-Base.metadata.create_all(engine)
 
 config_templates=jinja2.Environment(loader=jinja2.FileSystemLoader('config-templates'))
 def format_config_template(file, **kwargs):
@@ -237,6 +234,16 @@ def load_user(user_id):
     redis_client=get_redis_client()
     if redis_client.get(f'banned-session-{session_id}')=='':
         return None
+    user_exists=redis_client.get(f'userstate.{user_id}')
+    if user_exists is None:
+        #check postgres
+        with engine.connect() as conn:
+            user_exists=bool(conn.execute(text("SELECT id FROM im_users WHERE id=:userid"),{"userid":user_id}).scalar())
+            cookie=request.cookies.get('session')
+            redis_client.set(f'userstate.{user_id}',str(user_exists),exat=get_cookie_expiry_timestamp(cookie))
+    user_exists=user_exists=="True"
+    if not user_exists:
+      return None
     # cache the nonce
     if not (db_nonce:=redis_client.get(f'nonce.{user_id}')):
         with engine.connect() as conn:
@@ -321,6 +328,8 @@ def api_new_instance():
         name=request.form.get('name')
         type=request.form.get('type')
         error_template="new_instance.html" if type=="docker" else "new_virtual_instance.html" # to render errors
+        if not docker_container_name_suffix_valid.fullmatch(name):
+            raise ConfigError("Name invalid")
         if type=="docker":
             with engine.connect() as conn:
                 conn.begin()
@@ -395,6 +404,8 @@ def api_new_player():
             return render_template_with_user("new_player.html",instance=instance_raw,error="Player name and instance name required")
         if instance not in instances:
             return render_template_with_user("new_player.html",instance=instance_raw,error="Instance not found")
+        if not docker_container_name_suffix_valid.fullmatch(name):
+            raise ConfigError("Name invalid")
         uploaddir=f"/tmp/{containerName}"
         import secrets,base64
         credentials={"userID":userID,"password":base64.b64encode(secrets.token_bytes(8)).decode()}
@@ -435,6 +446,8 @@ def api_new_player():
         return render_template_with_user("new_player.html",instance=instance_raw,error="Player name conflict. Please choose another name")
     except NoKeysException:
         return render_template_with_user("new_player.html",instance=instance_raw,error="No keys left, the instance cannot fit any more players")
+    except ConfigError as e:
+        return render_template_with_user("new_player.html",instance=instance_raw,error=f"Input error: {e.args[0]}")
     with engine.connect() as conn:
         player_rows=conn.execute(text("SELECT name FROM players WHERE instance=:instance AND username=:username"),{"instance":instance,"username":username}).fetchall()
         players=[player_row[0] for player_row in player_rows]
@@ -524,6 +537,7 @@ def api_delete_player():
         shutil.rmtree(row[0])
         conn.execute(text("DELETE FROM players WHERE name=:name AND username=:username AND instance=:instance"),{"instance":instance,"name":player,"username":username})
         conn.execute(text("DELETE FROM users WHERE id=:id"),{"id":row[1]})
+        get_redis_client().delete(f"userstate.competition-manager.{row[1]}")
         conn.execute(text("UPDATE player_keys SET used=FALSE WHERE instance=:instance AND username=:username AND player_key=:player_key"),{"instance":instance,"username":username,"player_key":row[2]})
         conn.execute(text("UPDATE observer_keys SET used=FALSE WHERE instance=:instance AND username=:username AND observer_key=:observer_key"),{"instance":instance,"username":username,"observer_key":row[3]})
         conn.commit()
@@ -656,7 +670,6 @@ def change_password_post():
 @app.route("/logout")
 @login_required
 def logout():
-    import random
     cookie=request.cookies.get('session')
     get_redis_client().set(f'banned-session-{current_user.session_id}','',exat=get_cookie_expiry_timestamp(cookie))
     logout_user()
