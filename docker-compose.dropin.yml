@@ -1,0 +1,4 @@
+services:
+  miningbots-manager:
+    environment:
+      SERVICE_FQDN_MININGBOTS_MANAGER: 'miningbots-app.fried.tinkertofu.com'

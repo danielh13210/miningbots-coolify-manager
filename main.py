@@ -615,12 +615,14 @@ def api_share():
         conn.commit()
     return redirect(f"/sharing?instance={raw_instance}")
 
+this_domain=os.environ['SERVICE_FQDN_MININGBOTS_MANAGER']
+
 @app.route("/login",methods=['GET'])
 @login_view('/login')
 def login():
     if current_user.is_authenticated:
         next=request.args.get('next')
-        if next and next.startswith('/'):
+        if next and urlparse(next).netloc in ('',this_domain): # no netloc means this site, so only allow explicit this page or implicit
             return redirect(next)
         else:
             return redirect('/')
