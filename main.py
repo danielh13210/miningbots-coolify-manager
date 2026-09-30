@@ -310,6 +310,9 @@ def api_new_instance():
     def error_cleanup():
         shutil.rmtree(config_dir)
     try:
+        name=request.form.get('name')
+        type=request.form.get('type')
+        error_template="new_instance.html" if type=="docker" else "new_virtual_instance.html" # to render errors
         config_zip=request.files.get('config-zip')
         config_dir=tempfile.mkdtemp()
         import shutil
@@ -325,9 +328,6 @@ def api_new_instance():
         except:
             raise ConfigError('observer_keys.json: invalid JSON')
         keyfile.close()
-        name=request.form.get('name')
-        type=request.form.get('type')
-        error_template="new_instance.html" if type=="docker" else "new_virtual_instance.html" # to render errors
         if not docker_container_name_suffix_valid.fullmatch(name):
             raise ConfigError("Name invalid")
         if type=="docker":
