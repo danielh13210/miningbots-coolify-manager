@@ -385,6 +385,9 @@ def api_new_instance():
     except ConfigError as e:
         error_cleanup()
         return render_template_with_user(error_template,error=f"Configuration error: {e.args[0]}")
+    except zipfile.BadZipFile as e:
+        error_cleanup()
+        return render_template_with_user(error_template,error=f"Zip file invalid: {e.args[0]}")
     except:
         error_cleanup()
         raise
